@@ -40,8 +40,8 @@ async function importQuestionsFromFile(filePath: string, subject: string) {
   const fileContent = fs.readFileSync(filePath, "utf-8");
   const rawQuestions: RawQuestion[] = JSON.parse(fileContent);
   
-  let imported = 0;
   let skipped = 0;
+  const questionsToInsert = [];
 
   for (const raw of rawQuestions) {
     try {
@@ -75,7 +75,7 @@ async function importQuestionsFromFile(filePath: string, subject: string) {
       const correctAnswer = extractCorrectAnswer(raw.answer);
       const topic = raw.topic || "General";
 
-      await db.insert(questions).values({
+      questionsToInsert.push({
         question,
         optionA,
         optionB,
@@ -86,54 +86,44 @@ async function importQuestionsFromFile(filePath: string, subject: string) {
         subject,
         difficulty: 1, // Default difficulty
       });
-
-      imported++;
-      
-      if (imported % 100 === 0) {
-        console.log(`  Imported ${imported} questions...`);
-      }
     } catch (error) {
-      console.error(`Error importing question:`, error);
+      console.error(`Error processing question:`, error);
       skipped++;
     }
+  }
+
+  // Batch insert all questions at once
+  let imported = 0;
+  if (questionsToInsert.length > 0) {
+    console.log(`  Inserting ${questionsToInsert.length} questions in batch...`);
+    await db.insert(questions).values(questionsToInsert);
+    imported = questionsToInsert.length;
+    console.log(`  ✓ Successfully inserted ${imported} questions`);
   }
 
   console.log(`Completed ${subject}: ${imported} imported, ${skipped} skipped\n`);
   return { imported, skipped };
 }
 
-async function importAllQuestions() {
-  console.log("Starting question import process...\n");
+async function importFinanceQuestions() {
+  console.log("Starting Finance question import with batch inserts...\n");
 
-  const files = [
-    { path: "attached_assets/Marketing DECA_1762624175016.json", subject: "Marketing" },
-    { path: "attached_assets/Entrepreneurship DECA_1762624175016.json", subject: "Entrepreneurship" },
-    { path: "attached_assets/Finance DECA_1762624175016.json", subject: "Finance" },
-    { path: "attached_assets/Hospitality and Tourism DECA_1762624175016.json", subject: "Hospitality and Tourism" },
-    { path: "attached_assets/Business Management and Adminstration DECA_1762624175016.json", subject: "Business Management" },
-    { path: "attached_assets/Business Administration Core DECA_1762624175016.json", subject: "Business Administration" },
-  ];
-
-  let totalImported = 0;
-  let totalSkipped = 0;
-
-  for (const file of files) {
-    const { imported, skipped } = await importQuestionsFromFile(file.path, file.subject);
-    totalImported += imported;
-    totalSkipped += skipped;
-  }
+  const { imported, skipped } = await importQuestionsFromFile(
+    "attached_assets/Finance DECA_1762624175016.json", 
+    "Finance"
+  );
 
   console.log("=".repeat(50));
-  console.log(`Import complete!`);
-  console.log(`Total imported: ${totalImported}`);
-  console.log(`Total skipped: ${totalSkipped}`);
+  console.log(`Finance Import Complete!`);
+  console.log(`Total imported: ${imported}`);
+  console.log(`Total skipped: ${skipped}`);
   console.log("=".repeat(50));
 
   process.exit(0);
 }
 
 // Run import
-importAllQuestions().catch(error => {
+importFinanceQuestions().catch(error => {
   console.error("Fatal error during import:", error);
   process.exit(1);
 });

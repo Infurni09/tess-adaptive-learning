@@ -46,6 +46,13 @@ export interface IStorage {
     topicsMastered: number;
     studyStreak: number;
   }>;
+  
+  getDiagnosticAnalytics(userId: string, testType?: 'DECA' | 'FBLA'): Promise<{
+    subjects: Array<{ name: string; value: number; total: number; percentage: number }>;
+    weakTopics: Array<{ topic: string; subject: string; accuracy: number }>;
+    overallScore: number;
+    completedTests: number;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -263,6 +270,105 @@ export class DatabaseStorage implements IStorage {
       accuracyRate,
       topicsMastered,
       studyStreak,
+    };
+  }
+
+  async getDiagnosticAnalytics(userId: string, testType?: 'DECA' | 'FBLA'): Promise<{
+    subjects: Array<{ name: string; value: number; total: number; percentage: number }>;
+    weakTopics: Array<{ topic: string; subject: string; accuracy: number }>;
+    overallScore: number;
+    completedTests: number;
+  }> {
+    const DECA_SUBJECTS = ['Finance', 'Marketing', 'Operations', 'Management', 'Hospitality & Tourism', 'Entrepreneurship', 'Business Administration', 'Business Management'];
+    const FBLA_SUBJECTS = ['Business Knowledge', 'Communication', 'Finance', 'Marketing'];
+
+    const userTests = await db.select().from(diagnosticTests)
+      .where(and(
+        eq(diagnosticTests.userId, userId),
+        eq(diagnosticTests.status, "completed")
+      ));
+
+    if (userTests.length === 0) {
+      return {
+        subjects: [],
+        weakTopics: [],
+        overallScore: 0,
+        completedTests: 0,
+      };
+    }
+
+    const testIds = userTests.map(t => t.id);
+    
+    const responses = await db.select({
+      testResponse: testResponses,
+      question: questions,
+    })
+    .from(testResponses)
+    .innerJoin(questions, eq(testResponses.questionId, questions.id))
+    .where(inArray(testResponses.testId, testIds));
+
+    const filteredSubjects = testType === 'DECA' ? DECA_SUBJECTS : 
+                             testType === 'FBLA' ? FBLA_SUBJECTS : 
+                             [...DECA_SUBJECTS, ...FBLA_SUBJECTS];
+
+    const filteredResponses = responses.filter(r => 
+      filteredSubjects.includes(r.question.subject)
+    );
+
+    const subjectStats = new Map<string, { correct: number; total: number }>();
+    const topicStats = new Map<string, { correct: number; total: number; subject: string }>();
+
+    for (const { testResponse, question } of filteredResponses) {
+      const subject = question.subject;
+      const topic = question.topic;
+
+      if (!subjectStats.has(subject)) {
+        subjectStats.set(subject, { correct: 0, total: 0 });
+      }
+      const subjectStat = subjectStats.get(subject)!;
+      subjectStat.total++;
+      if (testResponse.isCorrect) {
+        subjectStat.correct++;
+      }
+
+      if (!topicStats.has(topic)) {
+        topicStats.set(topic, { correct: 0, total: 0, subject });
+      }
+      const topicStat = topicStats.get(topic)!;
+      topicStat.total++;
+      if (testResponse.isCorrect) {
+        topicStat.correct++;
+      }
+    }
+
+    const subjects = Array.from(subjectStats.entries()).map(([name, stats]) => ({
+      name,
+      value: stats.correct,
+      total: stats.total,
+      percentage: stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
+    }));
+
+    const weakTopics = Array.from(topicStats.entries())
+      .map(([topic, stats]) => ({
+        topic,
+        subject: stats.subject,
+        accuracy: stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
+      }))
+      .filter(t => t.accuracy < 60)
+      .sort((a, b) => a.accuracy - b.accuracy);
+
+    const totalCorrect = filteredResponses.filter(r => r.testResponse.isCorrect).length;
+    const totalQuestions = filteredResponses.length;
+    const overallScore = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+
+    const uniqueTestIds = new Set(filteredResponses.map(r => r.testResponse.testId));
+    const completedTests = uniqueTestIds.size;
+
+    return {
+      subjects,
+      weakTopics,
+      overallScore,
+      completedTests,
     };
   }
 }

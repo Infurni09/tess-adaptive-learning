@@ -120,9 +120,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/diagnostic-tests/:id/questions", requireAuth, async (req, res) => {
+    try {
+      const test = await storage.getDiagnosticTest(req.params.id);
+      if (!test) {
+        return res.status(404).json({ error: "Test not found" });
+      }
+      if (test.userId !== req.session.userId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      // Return 30 random questions for the test
+      const questions = await storage.getRandomQuestions(30);
+      res.json({ questions });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/diagnostic-tests/:id/submit", requireAuth, async (req, res) => {
     try {
       const { answers } = req.body; // { questionId: selectedAnswer }
+      
+      // Validate request body
+      if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+        return res.status(400).json({ 
+          error: "Invalid request format. Expected: { answers: { questionId: selectedAnswer, ... } }" 
+        });
+      }
+      
       const test = await storage.getDiagnosticTest(req.params.id);
       
       if (!test) {
@@ -252,6 +278,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const performance = await storage.getTopicPerformance(req.session.userId);
       res.json({ performance });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/analytics/diagnostics", requireAuth, async (req, res) => {
+    try {
+      const testType = req.query.type as 'DECA' | 'FBLA' | undefined;
+      
+      if (testType && testType !== 'DECA' && testType !== 'FBLA') {
+        return res.status(400).json({ error: "Invalid test type. Must be 'DECA' or 'FBLA'" });
+      }
+
+      const analytics = await storage.getDiagnosticAnalytics(req.session.userId, testType);
+      res.json(analytics);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
