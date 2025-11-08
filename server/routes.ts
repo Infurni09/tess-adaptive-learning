@@ -170,6 +170,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const question = await storage.getQuestionById(questionId);
         if (!question) continue;
 
+        // DEFENSIVE: Validate question belongs to same event type (DECA/FBLA)
+        if (question.testType !== test.testType) {
+          console.error(`Question ${questionId} testType ${question.testType} does not match test testType ${test.testType}`);
+          continue;
+        }
+
         const isCorrect = question.correctAnswer === selectedAnswer;
         if (isCorrect) correctCount++;
 
@@ -203,10 +209,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/practice-sessions", requireAuth, async (req, res) => {
     try {
       const { topicFilter, testType } = req.body;
-      const session = await storage.createPracticeSession(req.session.userId, topicFilter);
       
       // IMPORTANT: testType separates DECA and FBLA - they NEVER mix
       const eventType = testType || "DECA";
+      const session = await storage.createPracticeSession(req.session.userId, topicFilter, eventType);
       
       // Get questions based on weak topics or random
       const performance = await storage.getTopicPerformance(req.session.userId);
@@ -235,7 +241,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/practice-sessions/:id/submit", requireAuth, async (req, res) => {
     try {
       const { answers } = req.body;
-      const session = await storage.createPracticeSession(req.session.userId);
+      
+      // Load the existing practice session (don't create a new one!)
+      const session = await storage.getPracticeSession(req.params.id);
+      
+      if (!session) {
+        return res.status(404).json({ error: "Practice session not found" });
+      }
+      if (session.userId !== req.session.userId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
 
       let correctCount = 0;
       const results = [];
@@ -243,6 +258,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const [questionId, selectedAnswer] of Object.entries(answers)) {
         const question = await storage.getQuestionById(questionId);
         if (!question) continue;
+
+        // DEFENSIVE: Validate question belongs to same event type (DECA/FBLA)
+        if (question.testType !== session.testType) {
+          console.error(`Question ${questionId} testType ${question.testType} does not match session testType ${session.testType}`);
+          continue;
+        }
 
         const isCorrect = question.correctAnswer === selectedAnswer;
         if (isCorrect) correctCount++;

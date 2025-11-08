@@ -51,6 +51,7 @@ export const practiceSessions = pgTable("practice_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   topicFilter: text("topic_filter"), // optional topic focus
+  testType: text("test_type").default("DECA").notNull(), // DECA or FBLA - events NEVER mix
   score: integer("score"),
   totalQuestions: integer("total_questions"),
   completedAt: timestamp("completed_at"),

@@ -15,12 +15,14 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
 
   // Question operations
-  getRandomQuestions(limit: number, subject?: string, topic?: string): Promise<Question[]>;
+  // IMPORTANT: testType parameter separates DECA and FBLA - they NEVER mix
+  getRandomQuestions(limit: number, subject?: string, topic?: string, testType?: string): Promise<Question[]>;
   getQuestionById(id: string): Promise<Question | undefined>;
-  getQuestionsByTopic(topic: string, limit: number): Promise<Question[]>;
+  getQuestionsByTopic(topic: string, limit: number, testType?: string): Promise<Question[]>;
   
   // Diagnostic test operations
-  createDiagnosticTest(userId: string, testNumber: number): Promise<DiagnosticTest>;
+  // IMPORTANT: testType parameter separates DECA and FBLA - they NEVER mix
+  createDiagnosticTest(userId: string, testNumber: number, testType?: string): Promise<DiagnosticTest>;
   getDiagnosticTest(testId: string): Promise<DiagnosticTest | undefined>;
   getUserDiagnosticTests(userId: string): Promise<DiagnosticTest[]>;
   updateDiagnosticTestStatus(testId: string, status: string, score?: number): Promise<void>;
@@ -30,7 +32,9 @@ export interface IStorage {
   getTestResponses(testId: string): Promise<TestResponse[]>;
   
   // Practice session operations
-  createPracticeSession(userId: string, topicFilter?: string): Promise<PracticeSession>;
+  // IMPORTANT: testType parameter separates DECA and FBLA - they NEVER mix
+  createPracticeSession(userId: string, topicFilter?: string, testType?: string): Promise<PracticeSession>;
+  getPracticeSession(sessionId: string): Promise<PracticeSession | undefined>;
   updatePracticeSession(sessionId: string, score: number, totalQuestions: number): Promise<void>;
   savePracticeResponse(response: { sessionId: string; questionId: string; selectedAnswer: number; isCorrect: boolean }): Promise<void>;
   
@@ -160,11 +164,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Practice session operations
-  async createPracticeSession(userId: string, topicFilter?: string): Promise<PracticeSession> {
+  // IMPORTANT: testType separates DECA and FBLA - they NEVER mix
+  async createPracticeSession(userId: string, topicFilter?: string, testType: string = "DECA"): Promise<PracticeSession> {
     const [session] = await db.insert(practiceSessions).values({
       userId,
       topicFilter: topicFilter || null,
+      testType,
     }).returning();
+    return session;
+  }
+
+  async getPracticeSession(sessionId: string): Promise<PracticeSession | undefined> {
+    const [session] = await db.select().from(practiceSessions).where(eq(practiceSessions.id, sessionId));
     return session;
   }
 
