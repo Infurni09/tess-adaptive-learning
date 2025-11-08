@@ -1,16 +1,41 @@
-import { BarChart as BarChartIcon, AlertCircle, TrendingDown } from "lucide-react";
+import { BarChart as BarChartIcon, AlertCircle, TrendingDown, Target } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const COLORS = ["#93c5fd", "#60a5fa", "#3b82f6", "#2563eb", "#1d4ed8", "#1e40af"];
 
 export default function Dashboard() {
   const [selectedTest, setSelectedTest] = useState<"FBLA" | "DECA">("DECA");
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  
+  const createPracticeSession = useMutation({
+    mutationFn: async (topicFilter: string) => {
+      return apiRequest(`/api/practice-sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topicFilter, testType: selectedTest }),
+      });
+    },
+    onSuccess: (data: any) => {
+      setLocation(`/practice?sessionId=${data.session.id}`);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create practice session",
+        variant: "destructive",
+      });
+    },
+  });
 
   const { data: analytics, isLoading } = useQuery<{
     subjects: Array<{ name: string; value: number; total: number; percentage: number }>;
@@ -142,14 +167,27 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-3">
                   {analytics.weakTopics.slice(0, 5).map((topic, index) => (
-                    <div key={index} className="flex items-center justify-between gap-2" data-testid={`weak-topic-${index}`}>
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{topic.topic}</p>
-                        <p className="text-xs text-muted-foreground">{topic.subject}</p>
+                    <div key={index} className="flex flex-col gap-2" data-testid={`weak-topic-${index}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{topic.topic}</p>
+                          <p className="text-xs text-muted-foreground">{topic.subject}</p>
+                        </div>
+                        <Badge variant="destructive" className="ml-2">
+                          {topic.accuracy}%
+                        </Badge>
                       </div>
-                      <Badge variant="destructive" className="ml-2">
-                        {topic.accuracy}%
-                      </Badge>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => createPracticeSession.mutate(topic.topic)}
+                        disabled={createPracticeSession.isPending}
+                        className="w-full gap-2"
+                        data-testid={`button-practice-${index}`}
+                      >
+                        <Target className="h-4 w-4" />
+                        Targeted Practice
+                      </Button>
                     </div>
                   ))}
                 </div>
