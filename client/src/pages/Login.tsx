@@ -3,16 +3,47 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BookOpen } from "lucide-react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  const loginMutation = useMutation({
+    mutationFn: async (username: string) => {
+      const response = await apiRequest("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username }),
+        headers: { "Content-Type": "application/json" },
+      });
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Welcome!",
+        description: "Successfully logged in",
+      });
+      setLocation("/dashboard");
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to log in. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login submitted:', { username, password });
+    if (username.trim()) {
+      loginMutation.mutate(username);
+    }
   };
 
   return (
@@ -22,8 +53,8 @@ export default function Login() {
           <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
             <BookOpen className="h-6 w-6 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold">Welcome Back</h1>
-          <p className="text-sm text-muted-foreground mt-1">Sign in to continue your learning journey</p>
+          <h1 className="text-2xl font-bold">Welcome to TESS</h1>
+          <p className="text-sm text-muted-foreground mt-1">Targeted Educational Support System</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -40,34 +71,18 @@ export default function Login() {
             />
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <a href="#" className="text-sm text-primary hover-elevate px-2 py-1 rounded -mr-2">
-                Forgot password?
-              </a>
-            </div>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              data-testid="input-password"
-              required
-            />
-          </div>
-
-          <Button type="submit" className="w-full" data-testid="button-submit">
-            Sign In
+          <Button 
+            type="submit" 
+            className="w-full" 
+            data-testid="button-submit"
+            disabled={loginMutation.isPending}
+          >
+            {loginMutation.isPending ? "Logging in..." : "Log In"}
           </Button>
         </form>
 
-        <div className="mt-6 text-center text-sm">
-          <span className="text-muted-foreground">Don't have an account? </span>
-          <Link href="/register" className="text-primary font-medium hover-elevate px-2 py-1 rounded -ml-2" data-testid="link-register">
-            Sign up
-          </Link>
+        <div className="mt-6 text-center text-sm text-muted-foreground">
+          New here? Just enter a username to get started!
         </div>
       </Card>
     </div>

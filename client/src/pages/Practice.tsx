@@ -1,40 +1,60 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import QuestionCard from "@/components/QuestionCard";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Practice() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<{[key: number]: number}>({});
+  const [selectedAnswers, setSelectedAnswers] = useState<{[key: string]: number}>({});
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
-  const questions = [
-    {
-      topic: "Algebra",
-      question: "What is the value of x in the equation 2x + 5 = 13?",
-      options: ["x = 3", "x = 4", "x = 5", "x = 6"],
-      correctAnswer: 1,
-      explanation: "To solve 2x + 5 = 13, subtract 5 from both sides to get 2x = 8, then divide both sides by 2 to get x = 4."
+  const createSessionMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("/api/practice-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
     },
-    {
-      topic: "Geometry",
-      question: "What is the area of a circle with radius 5?",
-      options: ["25π", "10π", "5π", "15π"],
-      correctAnswer: 0,
-      explanation: "The area of a circle is πr². With r = 5, the area is π(5)² = 25π."
+    onSuccess: (data: any) => {
+      setSessionId(data.session.id);
     },
-    {
-      topic: "Calculus",
-      question: "What is the derivative of x² + 3x?",
-      options: ["2x + 3", "x + 3", "2x", "x²"],
-      correctAnswer: 0,
-      explanation: "The derivative of x² is 2x, and the derivative of 3x is 3. Therefore, the derivative of x² + 3x is 2x + 3."
-    },
-  ];
+  });
 
+  useEffect(() => {
+    if (!sessionId) {
+      createSessionMutation.mutate();
+    }
+  }, []);
+
+  const questions = createSessionMutation.data?.questions || [];
   const totalQuestions = questions.length;
-  const progress = ((currentQuestion + 1) / totalQuestions) * 100;
+  const progress = totalQuestions > 0 ? ((currentQuestion + 1) / totalQuestions) * 100 : 0;
+
+  const submitSessionMutation = useMutation({
+    mutationFn: async (answers: {[key: string]: number}) => {
+      return await apiRequest(`/api/practice-sessions/${sessionId}/submit`, {
+        method: "POST",
+        body: JSON.stringify({ answers }),
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Practice Complete!",
+        description: `You scored ${data.score}%`,
+      });
+      setLocation("/dashboard");
+    },
+  });
 
   const handleNext = () => {
     if (currentQuestion < totalQuestions - 1) {
@@ -49,27 +69,60 @@ export default function Practice() {
   };
 
   const handleAnswerSelect = (answerIndex: number) => {
-    setSelectedAnswers({
-      ...selectedAnswers,
-      [currentQuestion]: answerIndex
-    });
+    if (questions[currentQuestion]) {
+      setSelectedAnswers({
+        ...selectedAnswers,
+        [questions[currentQuestion].id]: answerIndex
+      });
+    }
   };
 
   const handleSubmit = () => {
-    console.log('Submit practice session', selectedAnswers);
+    if (sessionId && Object.keys(selectedAnswers).length > 0) {
+      submitSessionMutation.mutate(selectedAnswers);
+    }
   };
+
+  if (createSessionMutation.isPending || !sessionId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 pt-24">
+          <Skeleton className="h-64 w-full max-w-4xl mx-auto" />
+        </div>
+      </div>
+    );
+  }
+
+  if (totalQuestions === 0) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="p-8 text-center">
+          <p className="text-lg font-medium mb-4">No questions available</p>
+          <Button onClick={() => setLocation("/dashboard")}>
+            Return to Dashboard
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  const currentQ = questions[currentQuestion];
+  const currentSelectedAnswer = currentQ ? selectedAnswers[currentQ.id] : undefined;
 
   return (
     <div className="min-h-screen bg-background">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="sm" data-testid="button-exit">
-                <X className="h-4 w-4 mr-2" />
-                Exit Practice
-              </Button>
-            </Link>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              data-testid="button-exit"
+              onClick={() => setLocation("/dashboard")}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Exit Practice
+            </Button>
             <div className="text-sm font-medium" data-testid="text-progress">
               Question {currentQuestion + 1} of {totalQuestions}
             </div>
@@ -83,10 +136,10 @@ export default function Practice() {
           <QuestionCard
             questionNumber={currentQuestion + 1}
             totalQuestions={totalQuestions}
-            topic={questions[currentQuestion].topic}
-            question={questions[currentQuestion].question}
-            options={questions[currentQuestion].options}
-            selectedAnswer={selectedAnswers[currentQuestion]}
+            topic={currentQ.topic}
+            question={currentQ.question}
+            options={[currentQ.optionA, currentQ.optionB, currentQ.optionC, currentQ.optionD]}
+            selectedAnswer={currentSelectedAnswer}
             onAnswerSelect={handleAnswerSelect}
           />
 
@@ -104,15 +157,15 @@ export default function Practice() {
             {currentQuestion === totalQuestions - 1 ? (
               <Button
                 onClick={handleSubmit}
-                disabled={!selectedAnswers[currentQuestion]}
+                disabled={currentSelectedAnswer === undefined || submitSessionMutation.isPending}
                 data-testid="button-submit"
               >
-                Submit Practice
+                {submitSessionMutation.isPending ? "Submitting..." : "Submit Practice"}
               </Button>
             ) : (
               <Button
                 onClick={handleNext}
-                disabled={!selectedAnswers[currentQuestion]}
+                disabled={currentSelectedAnswer === undefined}
                 data-testid="button-next"
               >
                 Next
