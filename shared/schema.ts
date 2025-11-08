@@ -21,6 +21,7 @@ export const questions = pgTable("questions", {
   explanation: text("explanation"),
   topic: text("topic").notNull(),
   subject: text("subject").notNull(), // Marketing, Finance, etc.
+  testType: text("test_type").notNull().default("DECA"), // DECA or FBLA - events are separate
   difficulty: integer("difficulty").default(1), // 1-3 for easy/medium/hard
 });
 
@@ -28,9 +29,10 @@ export const diagnosticTests = pgTable("diagnostic_tests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   testNumber: integer("test_number").notNull(), // 1, 2, or 3
+  testType: text("test_type").notNull().default("DECA"), // DECA or FBLA - events are separate, cannot mix
   status: text("status").notNull().default("not_started"), // not_started, in_progress, completed
   score: integer("score"),
-  totalQuestions: integer("total_questions").default(30),
+  totalQuestions: integer("total_questions").default(100),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

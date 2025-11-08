@@ -56,8 +56,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 10;
       const subject = req.query.subject as string | undefined;
       const topic = req.query.topic as string | undefined;
+      const testType = (req.query.testType as string) || "DECA";
 
-      const questions = await storage.getRandomQuestions(limit, subject, topic);
+      // IMPORTANT: testType separates DECA and FBLA - they NEVER mix
+      const questions = await storage.getRandomQuestions(limit, subject, topic, testType);
       res.json({ questions });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -79,18 +81,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Diagnostic test routes
   app.post("/api/diagnostic-tests", requireAuth, async (req, res) => {
     try {
-      const { testNumber } = req.body;
+      const { testNumber, testType } = req.body;
       
       if (!testNumber || testNumber < 1 || testNumber > 3) {
         return res.status(400).json({ error: "Valid test number (1-3) required" });
       }
 
-      const test = await storage.createDiagnosticTest(req.session.userId, testNumber);
+      // IMPORTANT: testType (DECA or FBLA) separates question sets - they NEVER mix
+      const test = await storage.createDiagnosticTest(
+        req.session.userId, 
+        testNumber,
+        testType || "DECA"
+      );
       
-      // Get 30 random questions for the test
-      const questions = await storage.getRandomQuestions(30);
-      
-      res.json({ test, questions });
+      res.json({ test });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -131,7 +135,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Return 100 random questions for the diagnostic test
-      const questions = await storage.getRandomQuestions(100);
+      // IMPORTANT: Only get questions matching the test's event type (DECA/FBLA)
+      const questions = await storage.getRandomQuestions(100, undefined, undefined, test.testType);
       res.json({ questions });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -197,8 +202,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Practice session routes
   app.post("/api/practice-sessions", requireAuth, async (req, res) => {
     try {
-      const { topicFilter } = req.body;
+      const { topicFilter, testType } = req.body;
       const session = await storage.createPracticeSession(req.session.userId, topicFilter);
+      
+      // IMPORTANT: testType separates DECA and FBLA - they NEVER mix
+      const eventType = testType || "DECA";
       
       // Get questions based on weak topics or random
       const performance = await storage.getTopicPerformance(req.session.userId);
@@ -215,7 +223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Mix questions from weak topics
         questions = await storage.getQuestionsByTopic(weakTopics[0], 20);
       } else {
-        questions = await storage.getRandomQuestions(20);
+        questions = await storage.getRandomQuestions(20, undefined, undefined, eventType);
       }
 
       res.json({ session, questions });

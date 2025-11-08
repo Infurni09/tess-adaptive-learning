@@ -14,17 +14,23 @@ export default function DiagnosticTest() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<{[key: string]: number}>({});
   const [testId, setTestId] = useState<string | null>(null);
+  const [testType, setTestType] = useState<string | null>(null); // DECA or FBLA - NEVER mix
   const [timeRemaining, setTimeRemaining] = useState(9000); // 150 minutes for 100 questions
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const createTestMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/diagnostic-tests", { testNumber: 1 });
+    mutationFn: async (selectedTestType: string) => {
+      // IMPORTANT: testType separates DECA and FBLA - they NEVER mix
+      const res = await apiRequest("POST", "/api/diagnostic-tests", { 
+        testNumber: 1,
+        testType: selectedTestType 
+      });
       return await res.json();
     },
     onSuccess: (data: any) => {
       setTestId(data.test.id);
+      setTestType(data.test.testType);
     },
     onError: (error: any) => {
       toast({
@@ -45,11 +51,7 @@ export default function DiagnosticTest() {
     },
   });
 
-  useEffect(() => {
-    if (!testId) {
-      createTestMutation.mutate();
-    }
-  }, []);
+  // Don't auto-create test - wait for user to select event type
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -129,6 +131,70 @@ export default function DiagnosticTest() {
     return `${hours}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Event selection screen - IMPORTANT: DECA and FBLA NEVER mix
+  if (!testType) {
+    return (
+      <div className="min-h-screen p-8 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800">
+        <div className="max-w-2xl mx-auto">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold mb-4" data-testid="text-select-event">Select Your Event</h1>
+            <p className="text-muted-foreground text-lg">
+              Choose which competition you're preparing for. Questions are separated by event.
+            </p>
+          </div>
+          
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card 
+              className="p-8 cursor-pointer hover-elevate active-elevate-2 transition-all duration-200 border-2"
+              onClick={() => {
+                setTestType("DECA");
+                createTestMutation.mutate("DECA");
+              }}
+              data-testid="button-select-deca"
+            >
+              <h2 className="text-3xl font-bold text-primary mb-4">DECA</h2>
+              <p className="text-muted-foreground mb-4">
+                Distributive Education Clubs of America
+              </p>
+              <ul className="text-sm space-y-2">
+                <li>• Finance</li>
+                <li>• Marketing</li>
+                <li>• Entrepreneurship</li>
+                <li>• Business Administration</li>
+                <li>• Hospitality & Tourism</li>
+              </ul>
+            </Card>
+            
+            <Card 
+              className="p-8 cursor-pointer hover-elevate active-elevate-2 transition-all duration-200 border-2"
+              onClick={() => {
+                setTestType("FBLA");
+                createTestMutation.mutate("FBLA");
+              }}
+              data-testid="button-select-fbla"
+            >
+              <h2 className="text-3xl font-bold text-primary mb-4">FBLA</h2>
+              <p className="text-muted-foreground mb-4">
+                Future Business Leaders of America
+              </p>
+              <ul className="text-sm space-y-2">
+                <li>• Business Law</li>
+                <li>• Economics</li>
+                <li>• Accounting</li>
+                <li>• Management</li>
+                <li>• Computer Applications</li>
+              </ul>
+            </Card>
+          </div>
+          
+          <p className="text-center text-sm text-muted-foreground mt-8">
+            Note: DECA and FBLA questions are completely separate and do not overlap.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (createTestMutation.isPending || questionsLoading || !testId) {
     return (
       <div className="min-h-screen p-8">
@@ -180,7 +246,7 @@ export default function DiagnosticTest() {
             <Clipboard className="h-8 w-8 text-primary" />
             <div>
               <h1 className="text-3xl font-bold tracking-tight" data-testid="text-test-title">
-                DECA Diagnostic Test
+                {testType} Diagnostic Test
               </h1>
               <p className="text-sm text-muted-foreground">100 Questions - Comprehensive Assessment</p>
             </div>

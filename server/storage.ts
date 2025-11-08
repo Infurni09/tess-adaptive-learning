@@ -78,19 +78,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Question operations
-  async getRandomQuestions(limit: number, subject?: string, topic?: string): Promise<Question[]> {
+  // IMPORTANT: testType separates DECA and FBLA questions - they NEVER mix
+  async getRandomQuestions(limit: number, subject?: string, topic?: string, testType: string = "DECA"): Promise<Question[]> {
     let query = db.select().from(questions);
     
+    const conditions = [eq(questions.testType, testType)];
+    
     if (subject && topic) {
-      query = query.where(and(
-        eq(questions.subject, subject),
-        eq(questions.topic, topic)
-      )) as any;
+      conditions.push(eq(questions.subject, subject));
+      conditions.push(eq(questions.topic, topic));
     } else if (subject) {
-      query = query.where(eq(questions.subject, subject)) as any;
+      conditions.push(eq(questions.subject, subject));
     } else if (topic) {
-      query = query.where(eq(questions.topic, topic)) as any;
+      conditions.push(eq(questions.topic, topic));
     }
+    
+    query = query.where(and(...conditions)) as any;
     
     return query.orderBy(sql`RANDOM()`).limit(limit);
   }
@@ -108,10 +111,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Diagnostic test operations
-  async createDiagnosticTest(userId: string, testNumber: number): Promise<DiagnosticTest> {
+  // IMPORTANT: testType (DECA/FBLA) determines which questions are used - events NEVER mix
+  async createDiagnosticTest(userId: string, testNumber: number, testType: string = "DECA"): Promise<DiagnosticTest> {
     const [test] = await db.insert(diagnosticTests).values({
       userId,
       testNumber,
+      testType,
       status: "in_progress",
     }).returning();
     return test;
