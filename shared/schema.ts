@@ -20,6 +20,7 @@ export const questions = pgTable("questions", {
   correctAnswer: integer("correct_answer").notNull(), // 0-3 for A-D
   explanation: text("explanation"),
   topic: text("topic").notNull(),
+  subtopic: text("subtopic"), // CRITICAL: More granular categorization - MUST be event-specific AND subject-specific
   subject: text("subject").notNull(), // Marketing, Finance, etc.
   testType: text("test_type").notNull().default("DECA"), // DECA or FBLA - events are separate
   difficulty: integer("difficulty").default(1), // 1-3 for easy/medium/hard
