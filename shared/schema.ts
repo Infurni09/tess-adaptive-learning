@@ -84,6 +84,7 @@ export const topicPerformance = pgTable("topic_performance", {
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
+  password: true,
   replitUserId: true,
 });
 

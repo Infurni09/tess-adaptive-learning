@@ -45,7 +45,9 @@ export default function DiagnosticTest() {
     queryKey: ["/api/diagnostic-tests", testId, "questions"],
     enabled: !!testId,
     queryFn: async () => {
-      const res = await fetch(`/api/diagnostic-tests/${testId}/questions`);
+      const res = await fetch(`/api/diagnostic-tests/${testId}/questions`, {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to fetch questions");
       return res.json();
     },

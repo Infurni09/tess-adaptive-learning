@@ -28,16 +28,19 @@ Preferred communication style: Simple, everyday language.
 
 **Component Structure**: The application uses a component-based architecture with reusable UI components (`MetricCard`, `QuestionCard`, `DiagnosticTestCard`, `TopicPill`, `ProtectedRoute`) and page-level components for major features (Landing, Login, Dashboard, Practice, Analytics, AdaptivePractice, DiagnosticTest). A sidebar navigation pattern provides access to major platform features with username display and logout button for authenticated users.
 
-**Authentication System**: Cookie-based session authentication with protected routes:
+**Authentication System**: Password-based authentication with bcrypt hashing and persistent PostgreSQL session storage:
+- Users authenticate with username and password (demo account: username=demo, password=demo123)
+- Sessions persist for 30 days and survive server restarts via PostgreSQL session store
 - `useAuth` hook checks `/api/auth/me` endpoint to determine authentication status
 - `ProtectedRoute` component wraps protected pages and redirects unauthenticated users to `/login`
 - Landing page redirects authenticated users to dashboard
 - All feature pages (dashboard, diagnostic test, practice, analytics) require authentication
+- All API requests include `credentials: "include"` to ensure session cookies are transmitted
 - Sidebar shows username and logout button when logged in
 
 **Pages:**
 - **Landing** (`/`): Public landing page showing TESS features with "Get Started" button. Authenticated users are automatically redirected to dashboard.
-- **Login** (`/login`): Username-only authentication page. Users enter a username to log in or create a new account.
+- **Login** (`/login`): Password-based authentication page with demo credentials displayed in blue box (username: demo, password: demo123). Users can register new accounts or log in with existing credentials.
 - **DiagnosticTest** (`/diagnostic-test`): Protected. 100-question comprehensive assessment with DECA/FBLA event type selection, full navigation, progress tracking, timer (150 minutes), and answer persistence. Accessed via "Diagnostic Engine" in sidebar.
 - **Dashboard** (`/dashboard`): Protected. Real-time analytics showing DECA/FBLA performance by subject with "Topics Needing Improvement" section displaying weak subtopics (<60% accuracy) with one-click "Targeted Practice" buttons
 - **Practice** (`/practice`): Protected. Practice session interface for completing question sets
@@ -69,7 +72,7 @@ Preferred communication style: Simple, everyday language.
 - Practice session management (`/api/practice-sessions/*`)
 - Analytics and performance tracking
 
-**Session Management**: Cookie-based session authentication using express-session with PostgreSQL session store (connect-pg-simple). Session data tracks authenticated users throughout their learning journey.
+**Session Management**: Cookie-based session authentication using express-session with PostgreSQL session store (connect-pg-simple) for persistent sessions across server restarts. Session cookies expire after 30 days and include httpOnly and SameSite=Lax security settings. All API requests include credentials to ensure cookies are transmitted properly.
 
 **Database Layer**: Drizzle ORM provides type-safe database access with PostgreSQL as the underlying database. The storage layer implements a repository pattern (`IStorage` interface) abstracting database operations from route handlers.
 
@@ -77,7 +80,8 @@ Preferred communication style: Simple, everyday language.
 
 **Database Schema** (PostgreSQL via Drizzle ORM):
 
-- **users**: User accounts with username and optional Replit integration
+- **users**: User accounts with username, bcrypt-hashed password, and optional Replit integration
+- **session**: PostgreSQL session store table (managed by connect-pg-simple) for persistent login sessions
 - **questions**: Question bank with multiple choice options, correct answers, explanations, topics, subjects, and **testType** (DECA or FBLA)
 - **diagnosticTests**: Tracks diagnostic test sessions with status, scores, completion data, and **testType** (DECA or FBLA)
 - **testResponses**: Individual question responses within diagnostic tests

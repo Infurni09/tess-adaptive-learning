@@ -81,7 +81,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/me", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.session.userId!);
       res.json({ user });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -127,7 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // IMPORTANT: testType (DECA or FBLA) separates question sets - they NEVER mix
       const test = await storage.createDiagnosticTest(
-        req.session.userId, 
+        req.session.userId!, 
         testNumber,
         testType || "DECA"
       );
@@ -140,7 +140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/diagnostic-tests", requireAuth, async (req, res) => {
     try {
-      const tests = await storage.getUserDiagnosticTests(req.session.userId);
+      const tests = await storage.getUserDiagnosticTests(req.session.userId!);
       res.json({ tests });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -227,7 +227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update subtopic performance (event-specific and subject-specific)
         // Use subtopic if available (more granular), otherwise fall back to topic
         const performanceTopic = question.subtopic || question.topic;
-        await storage.updateTopicPerformance(req.session.userId, performanceTopic, isCorrect);
+        await storage.updateTopicPerformance(req.session.userId!, performanceTopic, isCorrect);
 
         results.push({
           questionId,
@@ -252,11 +252,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // IMPORTANT: testType separates DECA and FBLA - they NEVER mix
       const eventType = testType || "DECA";
-      const session = await storage.createPracticeSession(req.session.userId, topicFilter, eventType);
+      const session = await storage.createPracticeSession(req.session.userId!, topicFilter, eventType);
       
       // Get questions based on weak topics or random
       // CRITICAL: Filter performance by event type to prevent DECA/FBLA mixing
-      const performance = await storage.getTopicPerformance(req.session.userId);
+      const performance = await storage.getTopicPerformance(req.session.userId!);
       const weakTopics = performance
         .filter(p => p.averageScore < 70 && p.topic.startsWith(eventType + "-"))
         .sort((a, b) => a.averageScore - b.averageScore)
@@ -319,7 +319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update subtopic performance (event-specific and subject-specific)
         // Use subtopic if available (more granular), otherwise fall back to topic
         const performanceTopic = question.subtopic || question.topic;
-        await storage.updateTopicPerformance(req.session.userId, performanceTopic, isCorrect);
+        await storage.updateTopicPerformance(req.session.userId!, performanceTopic, isCorrect);
 
         results.push({
           questionId,
@@ -340,7 +340,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Analytics routes
   app.get("/api/analytics/stats", requireAuth, async (req, res) => {
     try {
-      const stats = await storage.getUserStats(req.session.userId);
+      const stats = await storage.getUserStats(req.session.userId!);
       res.json({ stats });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -349,7 +349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/analytics/topics", requireAuth, async (req, res) => {
     try {
-      const performance = await storage.getTopicPerformance(req.session.userId);
+      const performance = await storage.getTopicPerformance(req.session.userId!);
       res.json({ performance });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -364,7 +364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid test type. Must be 'DECA' or 'FBLA'" });
       }
 
-      const analytics = await storage.getDiagnosticAnalytics(req.session.userId, testType);
+      const analytics = await storage.getDiagnosticAnalytics(req.session.userId!, testType);
       res.json(analytics);
     } catch (error: any) {
       res.status(500).json({ error: error.message });

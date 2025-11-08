@@ -19,11 +19,8 @@ export default function Dashboard() {
   
   const createPracticeSession = useMutation({
     mutationFn: async (topicFilter: string) => {
-      return apiRequest(`/api/practice-sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicFilter, testType: selectedTest }),
-      });
+      const res = await apiRequest("POST", `/api/practice-sessions`, { topicFilter, testType: selectedTest });
+      return await res.json();
     },
     onSuccess: (data: any) => {
       setLocation(`/practice?sessionId=${data.session.id}`);
@@ -45,7 +42,9 @@ export default function Dashboard() {
   }>({
     queryKey: ['/api/analytics/diagnostics', selectedTest],
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/diagnostics?type=${selectedTest}`);
+      const res = await fetch(`/api/analytics/diagnostics?type=${selectedTest}`, {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error('Failed to fetch analytics');
       return res.json();
     },
