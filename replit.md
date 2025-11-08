@@ -8,9 +8,11 @@ The platform offers a complete learning workflow: students take 100-question dia
 
 **Core Features:**
 - **100-Question Diagnostic Tests**: Comprehensive assessment with timer, progress tracking, and full question navigation
-- **Real-Time Analytics**: Dashboard displays DECA/FBLA performance by subject with weak topic identification
-- **Adaptive Practice**: Targeted practice sessions based on diagnostic results
-- **Performance Tracking**: Detailed analytics showing strengths, weaknesses, and improvement trends
+- **Real-Time Analytics**: Dashboard displays DECA/FBLA performance by subject with granular subtopic-level weak area identification
+- **Targeted Practice**: One-click practice buttons create sessions filtered to specific weak subtopics (e.g., "DECA-Finance-Financial Analysis")
+- **Adaptive Practice**: Automated practice sessions based on diagnostic results with event-specific question filtering
+- **Performance Tracking**: Detailed analytics showing subtopic mastery with radar charts, bar charts, strengths/weaknesses panels, and comprehensive subtopic grid
+- **Granular Analytics**: Analytics page displays real-time subtopic performance data with DECA/FBLA filtering and individual practice buttons for each subtopic
 
 ## User Preferences
 
@@ -28,10 +30,17 @@ Preferred communication style: Simple, everyday language.
 
 **Pages:**
 - **DiagnosticTest** (`/diagnostic-test`): 100-question comprehensive assessment with full navigation, progress tracking, timer (150 minutes), and answer persistence. Accessed via "Diagnostic Engine" in sidebar.
-- **Dashboard** (`/dashboard`): Real-time analytics showing DECA/FBLA performance by subject
-- **Practice** (`/practice`): Practice session interface
+- **Dashboard** (`/dashboard`): Real-time analytics showing DECA/FBLA performance by subject with "Topics Needing Improvement" section displaying weak subtopics (<60% accuracy) with one-click "Targeted Practice" buttons
+- **Practice** (`/practice`): Practice session interface for completing question sets
 - **AdaptivePractice** (`/adaptive-practice`): Targeted practice based on weak topics
-- **Analytics** (`/analytics`): Proficiency tracking and detailed performance insights
+- **Analytics** (`/analytics`): Comprehensive performance analytics displaying real subtopic mastery data with:
+  - Event type toggle (DECA/FBLA) for filtering analytics
+  - Radar chart showing top 6 subtopic performance
+  - Bar chart showing top 10 subtopics by score
+  - "Top Strengths" panel (≥70% accuracy)
+  - "Areas for Improvement" panel (<70% accuracy) with individual practice buttons
+  - "All Subtopics" grid with performance cards and practice buttons for each subtopic
+  - Subtopic names formatted for readability (e.g., "Finance - Financial Analysis" instead of "DECA-Finance-Financial Analysis")
 
 **State Management**: React Query (TanStack Query) handles server state management, providing caching, background updates, and optimistic updates for API interactions. Local component state is managed with React hooks.
 
