@@ -63,7 +63,7 @@ export function AppSidebar() {
     },
     onSuccess: () => {
       queryClient.clear();
-      setLocation("/login");
+      setLocation("/");
     },
   });
 
