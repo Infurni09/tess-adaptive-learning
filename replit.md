@@ -90,6 +90,17 @@ Preferred communication style: Simple, everyday language.
 
 This multi-layered approach ensures DECA and FBLA questions can NEVER mix, even under malicious input.
 
+**Subtopic System (Granular Performance Tracking)**: Questions include event-specific and subject-specific subtopics for precise weakness identification:
+- **Format**: `EVENT-SUBJECT-CATEGORY` (e.g., "DECA-Finance-Analysis", "DECA-Marketing-Product")
+- **Generation**: Automated keyword-based analysis creates 20-30 subtopics per subject
+- **Separation Guarantee**: Every subtopic prefixed with event type ensures DECA/FBLA never mix
+- **Performance Tracking**: System tracks user performance by subtopic instead of coarse topics
+- **Practice Sessions**: Adaptive practice filters weak subtopics by event type before question selection
+- **Query Layer**: `getQuestionsByTopic()` searches both `topic` and `subtopic` fields for compatibility
+- **Auto-Import**: New questions automatically receive subtopics during import process
+
+All 2,485 DECA questions currently have subtopics generated. This provides students with granular analytics showing specific weak areas (e.g., "DECA-Finance-Financial Statements" at 65% vs "DECA-Finance-Financial Markets" at 85%).
+
 ### Analytics and Adaptive Learning
 
 **Performance Tracking**: The system tracks user performance at multiple levels:
