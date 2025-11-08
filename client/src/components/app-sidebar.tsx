@@ -13,7 +13,7 @@ import {
 const menuItems = [
   {
     title: "Diagnostic Engine",
-    url: "/",
+    url: "/diagnostic-test",
     icon: Settings,
   },
   {

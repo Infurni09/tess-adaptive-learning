@@ -11,6 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import Practice from "@/pages/Practice";
 import Analytics from "@/pages/Analytics";
 import AdaptivePractice from "@/pages/AdaptivePractice";
+import DiagnosticTest from "@/pages/DiagnosticTest";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -20,6 +21,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Login} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/diagnostic-test" component={DiagnosticTest} />
       <Route path="/practice" component={Practice} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/adaptive-practice" component={AdaptivePractice} />

@@ -130,8 +130,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Forbidden" });
       }
       
-      // Return 30 random questions for the test
-      const questions = await storage.getRandomQuestions(30);
+      // Return 100 random questions for the diagnostic test
+      const questions = await storage.getRandomQuestions(100);
       res.json({ questions });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
