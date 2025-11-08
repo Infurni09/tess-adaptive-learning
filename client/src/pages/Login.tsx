@@ -11,25 +11,37 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
   const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [isRegister, setIsRegister] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const loginMutation = useMutation({
-    mutationFn: async (username: string) => {
-      const response = await apiRequest("POST", "/api/auth/login", { username });
+    mutationFn: async (data: { username: string; password: string }) => {
+      const endpoint = isRegister ? "/api/auth/register" : "/api/auth/login";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Authentication failed");
+      }
       return await response.json();
     },
     onSuccess: () => {
       toast({
-        title: "Welcome!",
-        description: "Successfully logged in",
+        title: isRegister ? "Account Created!" : "Welcome!",
+        description: isRegister ? "Your account has been created successfully" : "Successfully logged in",
       });
       setLocation("/dashboard");
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to log in. Please try again.",
+        description: error.message,
         variant: "destructive",
       });
     },
@@ -37,8 +49,8 @@ export default function Login() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username.trim()) {
-      loginMutation.mutate(username);
+    if (username.trim() && password.trim()) {
+      loginMutation.mutate({ username, password });
     }
   };
 
@@ -68,6 +80,24 @@ export default function Login() {
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="transition-all duration-200"
+              data-testid="input-password"
+              required
+              minLength={6}
+            />
+            {isRegister && (
+              <p className="text-xs text-muted-foreground">Password must be at least 6 characters</p>
+            )}
+          </div>
+
           <Button 
             type="submit" 
             size="lg"
@@ -75,12 +105,21 @@ export default function Login() {
             data-testid="button-submit"
             disabled={loginMutation.isPending}
           >
-            {loginMutation.isPending ? "Logging in..." : "Log In"}
+            {loginMutation.isPending 
+              ? (isRegister ? "Creating account..." : "Logging in...") 
+              : (isRegister ? "Create Account" : "Log In")}
           </Button>
         </form>
 
-        <div className="mt-8 text-center text-sm text-muted-foreground">
-          New here? Just enter a username to get started!
+        <div className="mt-8 text-center text-sm">
+          <button
+            type="button"
+            onClick={() => setIsRegister(!isRegister)}
+            className="text-primary hover:underline"
+            data-testid="button-toggle-mode"
+          >
+            {isRegister ? "Already have an account? Log in" : "Don't have an account? Sign up"}
+          </button>
         </div>
       </Card>
     </div>

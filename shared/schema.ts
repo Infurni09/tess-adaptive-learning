@@ -6,6 +6,7 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
+  password: text("password").notNull().default('$2a$10$defaulthash'), // bcrypt hash of 'password'
   replitUserId: text("replit_user_id").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

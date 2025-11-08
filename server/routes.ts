@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Simple session-based auth middleware
@@ -15,21 +16,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { username } = req.body;
+      const { username, password } = req.body;
       
-      if (!username) {
-        return res.status(400).json({ error: "Username required" });
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password required" });
       }
 
-      let user = await storage.getUserByUsername(username);
+      const user = await storage.getUserByUsername(username);
       
       if (!user) {
-        // Create new user if doesn't exist
-        user = await storage.createUser({ username, replitUserId: null });
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+
+      // Verify password
+      const isValid = await bcrypt.compare(password, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: "Invalid username or password" });
       }
 
       req.session.userId = user.id;
-      res.json({ user });
+      res.json({ user: { id: user.id, username: user.username } });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Registration route
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password required" });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(409).json({ error: "Username already taken" });
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Create new user
+      const user = await storage.createUser({ username, password: hashedPassword, replitUserId: null });
+
+      req.session.userId = user.id;
+      res.json({ user: { id: user.id, username: user.username } });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
