@@ -31,12 +31,13 @@ export default function Login() {
       }
       return await response.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: isRegister ? "Account Created!" : "Welcome!",
         description: isRegister ? "Your account has been created successfully" : "Successfully logged in",
       });
-      setLocation("/dashboard");
+      // Force page reload to ensure auth state is fresh
+      window.location.href = "/dashboard";
     },
     onError: (error: Error) => {
       toast({
