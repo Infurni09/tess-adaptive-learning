@@ -112,15 +112,30 @@ export default function Login() {
           </Button>
         </form>
 
-        <div className="mt-8 text-center text-sm">
-          <button
-            type="button"
-            onClick={() => setIsRegister(!isRegister)}
-            className="text-primary hover:underline"
-            data-testid="button-toggle-mode"
-          >
-            {isRegister ? "Already have an account? Log in" : "Don't have an account? Sign up"}
-          </button>
+        <div className="mt-8 space-y-3">
+          <div className="text-center text-sm">
+            <button
+              type="button"
+              onClick={() => setIsRegister(!isRegister)}
+              className="text-primary hover:underline"
+              data-testid="button-toggle-mode"
+            >
+              {isRegister ? "Already have an account? Log in" : "Don't have an account? Sign up"}
+            </button>
+          </div>
+          
+          {!isRegister && (
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-center">
+              <p className="text-sm text-blue-900 dark:text-blue-100 font-medium mb-2">
+                Demo Account
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Username: <span className="font-mono font-semibold">demo</span>
+                <br />
+                Password: <span className="font-mono font-semibold">demo123</span>
+              </p>
+            </div>
+          )}
         </div>
       </Card>
     </div>
