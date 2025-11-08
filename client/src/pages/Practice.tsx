@@ -40,7 +40,13 @@ export default function Practice() {
     return () => clearInterval(timer);
   }, []);
 
-  const questions = createSessionMutation.data?.questions || [];
+  const rawQuestions = createSessionMutation.data?.questions || [];
+  // Convert question format from optionA/B/C/D to answers array
+  const questions = rawQuestions.map((q: any) => ({
+    ...q,
+    questionText: q.question,
+    answers: [q.optionA, q.optionB, q.optionC, q.optionD],
+  }));
   const totalQuestions = questions.length;
   const progress = totalQuestions > 0 ? ((currentQuestion + 1) / totalQuestions) * 100 : 0;
 
@@ -115,6 +121,35 @@ export default function Practice() {
   const currentQ = questions[currentQuestion];
   const currentSelectedAnswer = currentQ ? selectedAnswers[currentQ.id] : undefined;
 
+  if (createSessionMutation.isLoading) {
+    return (
+      <div className="min-h-screen p-8">
+        <div className="max-w-4xl mx-auto">
+          <Card className="p-8">
+            <Skeleton className="h-8 w-48 mb-4" />
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-3/4" />
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentQ) {
+    return (
+      <div className="min-h-screen p-8">
+        <div className="max-w-4xl mx-auto">
+          <Card className="p-8 text-center">
+            <p className="text-lg text-muted-foreground">No questions available. Please try again.</p>
+            <Button className="mt-4" onClick={() => setLocation("/dashboard")} data-testid="button-back-to-dashboard">
+              Back to Dashboard
+            </Button>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-4xl mx-auto">
@@ -141,11 +176,11 @@ export default function Practice() {
 
         <div className="mb-8">
           <h2 className="text-xl font-semibold mb-6" data-testid="text-question">
-            {currentQuestion + 1}. {currentQ?.questionText}
+            {currentQuestion + 1}. {currentQ.questionText}
           </h2>
 
           <div className="space-y-4">
-            {currentQ?.answers.map((answer: string, index: number) => (
+            {currentQ.answers && currentQ.answers.map((answer: string, index: number) => (
               <button
                 key={index}
                 onClick={() => handleAnswerSelect(index)}
