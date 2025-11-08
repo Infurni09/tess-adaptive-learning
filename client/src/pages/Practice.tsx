@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
-import QuestionCard from "@/components/QuestionCard";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, ArrowRight, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Briefcase } from "lucide-react";
 import { useLocation } from "wouter";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
@@ -14,15 +13,14 @@ export default function Practice() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<{[key: string]: number}>({});
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState(1500);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const createSessionMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("/api/practice-sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await apiRequest("POST", "/api/practice-sessions");
+      return await res.json();
     },
     onSuccess: (data: any) => {
       setSessionId(data.session.id);
@@ -35,17 +33,21 @@ export default function Practice() {
     }
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeRemaining((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const questions = createSessionMutation.data?.questions || [];
   const totalQuestions = questions.length;
   const progress = totalQuestions > 0 ? ((currentQuestion + 1) / totalQuestions) * 100 : 0;
 
   const submitSessionMutation = useMutation({
     mutationFn: async (answers: {[key: string]: number}) => {
-      return await apiRequest(`/api/practice-sessions/${sessionId}/submit`, {
-        method: "POST",
-        body: JSON.stringify({ answers }),
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await apiRequest("POST", `/api/practice-sessions/${sessionId}/submit`, { answers });
+      return await res.json();
     },
     onSuccess: (data: any) => {
       toast({
@@ -83,19 +85,23 @@ export default function Practice() {
     }
   };
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
   if (createSessionMutation.isPending || !sessionId) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 pt-24">
-          <Skeleton className="h-64 w-full max-w-4xl mx-auto" />
-        </div>
+      <div className="min-h-screen p-8">
+        <Skeleton className="h-64 w-full max-w-4xl mx-auto" />
       </div>
     );
   }
 
   if (totalQuestions === 0) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center p-8">
         <Card className="p-8 text-center">
           <p className="text-lg font-medium mb-4">No questions available</p>
           <Button onClick={() => setLocation("/dashboard")}>
@@ -110,71 +116,88 @@ export default function Practice() {
   const currentSelectedAnswer = currentQ ? selectedAnswers[currentQ.id] : undefined;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              data-testid="button-exit"
-              onClick={() => setLocation("/dashboard")}
-            >
-              <X className="h-4 w-4 mr-2" />
-              Exit Practice
-            </Button>
-            <div className="text-sm font-medium" data-testid="text-progress">
-              Question {currentQuestion + 1} of {totalQuestions}
-            </div>
+    <div className="min-h-screen p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Briefcase className="h-8 w-8" />
+            <h1 className="text-3xl font-bold" data-testid="text-test-title">
+              DECA Testing Diagnostic
+            </h1>
+          </div>
+          <div className="text-2xl font-semibold text-success" data-testid="text-timer">
+            {formatTime(timeRemaining)}
           </div>
         </div>
-        <Progress value={progress} className="h-2 rounded-none" />
-      </header>
 
-      <main className="pt-24 pb-12">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl">
-          <QuestionCard
-            questionNumber={currentQuestion + 1}
-            totalQuestions={totalQuestions}
-            topic={currentQ.topic}
-            question={currentQ.question}
-            options={[currentQ.optionA, currentQ.optionB, currentQ.optionC, currentQ.optionD]}
-            selectedAnswer={currentSelectedAnswer}
-            onAnswerSelect={handleAnswerSelect}
-          />
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <Progress value={progress} className="flex-1" />
+            <span className="ml-4 text-lg font-semibold" data-testid="text-progress">
+              {Math.round(progress)}%
+            </span>
+          </div>
+        </div>
 
-          <div className="flex items-center justify-between mt-8 max-w-3xl mx-auto">
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-6" data-testid="text-question">
+            {currentQuestion + 1}. {currentQ?.questionText}
+          </h2>
+
+          <div className="space-y-4">
+            {currentQ?.answers.map((answer: string, index: number) => (
+              <button
+                key={index}
+                onClick={() => handleAnswerSelect(index)}
+                className={`w-full p-4 text-left rounded-lg border-2 transition-colors hover-elevate active-elevate-2 ${
+                  currentSelectedAnswer === index
+                    ? "border-primary bg-primary/10"
+                    : "border-border bg-card"
+                }`}
+                data-testid={`button-answer-${index}`}
+              >
+                <span className="font-semibold mr-3">
+                  {String.fromCharCode(65 + index)}.
+                </span>
+                {answer}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={handlePrevious}
+            disabled={currentQuestion === 0}
+            data-testid="button-previous"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Previous
+          </Button>
+
+          {currentQuestion === totalQuestions - 1 ? (
             <Button
-              variant="outline"
-              onClick={handlePrevious}
-              disabled={currentQuestion === 0}
-              data-testid="button-previous"
+              size="lg"
+              onClick={handleSubmit}
+              disabled={Object.keys(selectedAnswers).length === 0}
+              data-testid="button-submit"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Previous
+              Submit Test
             </Button>
-
-            {currentQuestion === totalQuestions - 1 ? (
-              <Button
-                onClick={handleSubmit}
-                disabled={currentSelectedAnswer === undefined || submitSessionMutation.isPending}
-                data-testid="button-submit"
-              >
-                {submitSessionMutation.isPending ? "Submitting..." : "Submit Practice"}
-              </Button>
-            ) : (
-              <Button
-                onClick={handleNext}
-                disabled={currentSelectedAnswer === undefined}
-                data-testid="button-next"
-              >
-                Next
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            )}
-          </div>
+          ) : (
+            <Button
+              size="lg"
+              onClick={handleNext}
+              data-testid="button-next"
+            >
+              Next
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }
