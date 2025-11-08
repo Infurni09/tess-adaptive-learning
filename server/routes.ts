@@ -186,8 +186,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isCorrect,
         });
 
-        // Update topic performance
-        await storage.updateTopicPerformance(req.session.userId, question.topic, isCorrect);
+        // Update subtopic performance (event-specific and subject-specific)
+        // Use subtopic if available (more granular), otherwise fall back to topic
+        const performanceTopic = question.subtopic || question.topic;
+        await storage.updateTopicPerformance(req.session.userId, performanceTopic, isCorrect);
 
         results.push({
           questionId,
@@ -275,7 +277,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isCorrect,
         });
 
-        await storage.updateTopicPerformance(req.session.userId, question.topic, isCorrect);
+        // Update subtopic performance (event-specific and subject-specific)
+        // Use subtopic if available (more granular), otherwise fall back to topic
+        const performanceTopic = question.subtopic || question.topic;
+        await storage.updateTopicPerformance(req.session.userId, performanceTopic, isCorrect);
 
         results.push({
           questionId,

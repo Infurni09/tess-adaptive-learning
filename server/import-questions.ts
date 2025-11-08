@@ -34,6 +34,45 @@ function cleanQuestionText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+// CRITICAL: Generate event-specific and subject-specific subtopics
+// Subtopics NEVER mix between DECA/FBLA or between subjects
+function generateSubtopic(question: string, topic: string, subject: string, testType: string): string {
+  const lowerQuestion = question.toLowerCase();
+  const lowerTopic = topic.toLowerCase();
+  const context = `${lowerQuestion} ${lowerTopic}`;
+  
+  // Simple keyword-based subtopic generation
+  const patterns = {
+    analysis: ["ratio", "analysis", "analyze", "interpret", "evaluate"],
+    planning: ["budget", "forecast", "plan", "project"],
+    markets: ["stock", "bond", "equity", "debt", "market"],
+    credit: ["credit", "loan", "lending", "borrow"],
+    risk: ["risk", "insurance", "protect"],
+    strategy: ["strategy", "objective", "goal", "positioning"],
+    product: ["product", "brand", "feature", "quality"],
+    pricing: ["price", "pricing", "cost", "value"],
+    promotion: ["promotion", "advertising", "publicity"],
+    customer: ["customer", "consumer", "buyer", "satisfaction"],
+    management: ["management", "manager", "supervise", "organize"],
+    leadership: ["leadership", "leader", "motivate", "inspire"],
+    hr: ["human resource", "employee", "recruit", "hire"],
+    law: ["law", "legal", "regulation", "compliance"],
+    ethics: ["ethics", "ethical", "responsibility"],
+    technology: ["technology", "software", "system", "data"],
+  };
+  
+  for (const [category, keywords] of Object.entries(patterns)) {
+    if (keywords.some(kw => context.includes(kw))) {
+      // CRITICAL: Prefix with testType and subject to ensure NO MIXING
+      const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+      return `${testType}-${subject}-${categoryName}`;
+    }
+  }
+  
+  // Default: use topic with event/subject prefix
+  return `${testType}-${subject}-${topic}`;
+}
+
 async function importQuestionsFromFile(filePath: string, subject: string) {
   console.log(`Importing questions from ${filePath} (${subject})...`);
   
@@ -79,6 +118,9 @@ async function importQuestionsFromFile(filePath: string, subject: string) {
 
       const correctAnswer = extractCorrectAnswer(raw.answer);
       const topic = raw.topic || "General";
+      
+      // CRITICAL: Generate event-specific and subject-specific subtopic
+      const subtopic = generateSubtopic(question, topic, subject, testType);
 
       questionsToInsert.push({
         question,
@@ -88,6 +130,7 @@ async function importQuestionsFromFile(filePath: string, subject: string) {
         optionD,
         correctAnswer,
         topic,
+        subtopic, // CRITICAL: Event-specific and subject-specific - NEVER mix
         subject,
         testType, // IMPORTANT: Set testType from filename (DECA or FBLA)
         difficulty: 1, // Default difficulty
