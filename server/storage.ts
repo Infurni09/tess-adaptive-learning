@@ -5,7 +5,7 @@ import {
   type User, type InsertUser, type Question, type DiagnosticTest,
   type TestResponse, type PracticeSession, type TopicPerformance
 } from "@shared/schema";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, or } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -109,9 +109,14 @@ export class DatabaseStorage implements IStorage {
 
   async getQuestionsByTopic(topic: string, limit: number, testType: string = "DECA"): Promise<Question[]> {
     // IMPORTANT: Questions are filtered by testType - DECA and FBLA NEVER mix
+    // NOTE: 'topic' parameter can be either a coarse topic or a subtopic (EVENT-SUBJECT-CATEGORY)
+    // Search both topic and subtopic fields to support granular performance tracking
     return db.select().from(questions)
       .where(and(
-        eq(questions.topic, topic),
+        or(
+          eq(questions.topic, topic),
+          eq(questions.subtopic, topic)
+        ),
         eq(questions.testType, testType)
       ))
       .orderBy(sql`RANDOM()`)

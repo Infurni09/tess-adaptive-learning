@@ -217,9 +217,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const session = await storage.createPracticeSession(req.session.userId, topicFilter, eventType);
       
       // Get questions based on weak topics or random
+      // CRITICAL: Filter performance by event type to prevent DECA/FBLA mixing
       const performance = await storage.getTopicPerformance(req.session.userId);
       const weakTopics = performance
-        .filter(p => p.averageScore < 70)
+        .filter(p => p.averageScore < 70 && p.topic.startsWith(eventType + "-"))
         .sort((a, b) => a.averageScore - b.averageScore)
         .slice(0, 3)
         .map(p => p.topic);
