@@ -26,14 +26,23 @@ Preferred communication style: Simple, everyday language.
 
 **Design Philosophy**: The application follows a "reference-based hybrid" approach drawing inspiration from Khan Academy's clarity, Linear's polished interfaces, and Notion's content organization. Typography uses Inter/DM Sans as primary fonts with Source Sans Pro for dense content areas. The design system emphasizes credibility and sophistication suitable for educational contexts.
 
-**Component Structure**: The application uses a component-based architecture with reusable UI components (`MetricCard`, `QuestionCard`, `DiagnosticTestCard`, `TopicPill`) and page-level components for major features (Dashboard, Practice, Analytics, AdaptivePractice, DiagnosticTest). A sidebar navigation pattern provides access to major platform features.
+**Component Structure**: The application uses a component-based architecture with reusable UI components (`MetricCard`, `QuestionCard`, `DiagnosticTestCard`, `TopicPill`, `ProtectedRoute`) and page-level components for major features (Landing, Login, Dashboard, Practice, Analytics, AdaptivePractice, DiagnosticTest). A sidebar navigation pattern provides access to major platform features with username display and logout button for authenticated users.
+
+**Authentication System**: Cookie-based session authentication with protected routes:
+- `useAuth` hook checks `/api/auth/me` endpoint to determine authentication status
+- `ProtectedRoute` component wraps protected pages and redirects unauthenticated users to `/login`
+- Landing page redirects authenticated users to dashboard
+- All feature pages (dashboard, diagnostic test, practice, analytics) require authentication
+- Sidebar shows username and logout button when logged in
 
 **Pages:**
-- **DiagnosticTest** (`/diagnostic-test`): 100-question comprehensive assessment with full navigation, progress tracking, timer (150 minutes), and answer persistence. Accessed via "Diagnostic Engine" in sidebar.
-- **Dashboard** (`/dashboard`): Real-time analytics showing DECA/FBLA performance by subject with "Topics Needing Improvement" section displaying weak subtopics (<60% accuracy) with one-click "Targeted Practice" buttons
-- **Practice** (`/practice`): Practice session interface for completing question sets
-- **AdaptivePractice** (`/adaptive-practice`): Targeted practice based on weak topics
-- **Analytics** (`/analytics`): Comprehensive performance analytics displaying real subtopic mastery data with:
+- **Landing** (`/`): Public landing page showing TESS features with "Get Started" button. Authenticated users are automatically redirected to dashboard.
+- **Login** (`/login`): Username-only authentication page. Users enter a username to log in or create a new account.
+- **DiagnosticTest** (`/diagnostic-test`): Protected. 100-question comprehensive assessment with DECA/FBLA event type selection, full navigation, progress tracking, timer (150 minutes), and answer persistence. Accessed via "Diagnostic Engine" in sidebar.
+- **Dashboard** (`/dashboard`): Protected. Real-time analytics showing DECA/FBLA performance by subject with "Topics Needing Improvement" section displaying weak subtopics (<60% accuracy) with one-click "Targeted Practice" buttons
+- **Practice** (`/practice`): Protected. Practice session interface for completing question sets
+- **AdaptivePractice** (`/adaptive-practice`): Protected. Targeted practice based on weak topics
+- **Analytics** (`/analytics`): Protected. Comprehensive performance analytics displaying real subtopic mastery data with:
   - Event type toggle (DECA/FBLA) for filtering analytics
   - Radar chart showing top 6 subtopic performance
   - Bar chart showing top 10 subtopics by score
