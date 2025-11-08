@@ -60,10 +60,10 @@ Preferred communication style: Simple, everyday language.
 **Database Schema** (PostgreSQL via Drizzle ORM):
 
 - **users**: User accounts with username and optional Replit integration
-- **questions**: Question bank with multiple choice options, correct answers, explanations, topics, and subjects
-- **diagnosticTests**: Tracks diagnostic test sessions with status, scores, and completion data
+- **questions**: Question bank with multiple choice options, correct answers, explanations, topics, subjects, and **testType** (DECA or FBLA)
+- **diagnosticTests**: Tracks diagnostic test sessions with status, scores, completion data, and **testType** (DECA or FBLA)
 - **testResponses**: Individual question responses within diagnostic tests
-- **practiceSessions**: Practice session metadata and configuration
+- **practiceSessions**: Practice session metadata, configuration, and **testType** (DECA or FBLA)
 - **practiceResponses**: Question responses within practice sessions
 - **topicPerformance**: Aggregated performance metrics per topic per user
 
@@ -72,12 +72,23 @@ Preferred communication style: Simple, everyday language.
 - Cascade deletion maintains referential integrity (e.g., deleting a user removes their tests and sessions)
 - Separate tables for test vs. practice responses allow different analytics approaches
 - Topic performance aggregation enables adaptive practice generation
+- **Event Separation**: DECA and FBLA question sets are completely isolated at every layer via `testType` field - they NEVER mix under any circumstance
 
 ### Question Management
 
 **Data Source**: Questions are stored in JSON files in `attached_assets/` organized by subject (Business Administration, Business Management, Entrepreneurship, Finance, Hospitality & Tourism, Marketing). Each question includes topic categorization for granular performance tracking.
 
-**Import Strategy**: Server-side import script (`server/import-questions.ts`) processes JSON files, cleans question text and options, extracts correct answers, and populates the database. This allows bulk question management outside the application runtime.
+**Import Strategy**: Server-side import script (`server/import-questions.ts`) processes JSON files, cleans question text and options, extracts correct answers, and populates the database. The script automatically detects event type (DECA or FBLA) from filenames and sets the `testType` field accordingly, ensuring complete separation of question sets.
+
+**Event Separation (CRITICAL)**: DECA and FBLA questions are completely isolated across the entire system:
+- **Schema Level**: All questions, diagnostic tests, and practice sessions include a `testType` field
+- **Storage Layer**: Every question-fetching method (`getRandomQuestions`, `getQuestionsByTopic`) filters by `testType`
+- **API Layer**: All endpoints accept and enforce `testType` parameters
+- **Frontend**: Users must explicitly select DECA or FBLA before starting tests or practice sessions
+- **Defensive Validation**: Submission endpoints validate that question `testType` matches test/session `testType`, rejecting mismatches
+- **Import Script**: Automatically detects "DECA" or "FBLA" from filename and sets `testType` accordingly
+
+This multi-layered approach ensures DECA and FBLA questions can NEVER mix, even under malicious input.
 
 ### Analytics and Adaptive Learning
 
