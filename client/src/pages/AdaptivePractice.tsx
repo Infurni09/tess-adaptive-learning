@@ -19,28 +19,32 @@ export default function AdaptivePractice() {
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-5xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {subjects.map((subject) => (
             <Card 
               key={subject.name} 
-              className="p-8 flex flex-col items-center justify-center text-center space-y-6"
+              className="shadow-md border-card-border transition-all duration-200 hover-elevate"
               data-testid={`card-subject-${subject.name.toLowerCase().replace(/\s+/g, "-")}`}
             >
-              <div>
-                <h2 className="text-4xl font-bold mb-4" data-testid={`text-subject-${subject.name.toLowerCase().replace(/\s+/g, "-")}`}>
-                  {subject.name}
-                </h2>
-                <p className={`text-3xl font-semibold ${subject.color}`} data-testid={`text-mastery-${subject.name.toLowerCase().replace(/\s+/g, "-")}`}>
-                  {subject.mastery}% Mastery
-                </p>
+              <div className="h-2 bg-gradient-to-r from-blue-400 to-cyan-400"></div>
+              <div className="p-10 flex flex-col items-center justify-center text-center space-y-8">
+                <div className="space-y-4">
+                  <h2 className="text-4xl font-bold tracking-tight" data-testid={`text-subject-${subject.name.toLowerCase().replace(/\s+/g, "-")}`}>
+                    {subject.name}
+                  </h2>
+                  <p className={`text-3xl font-semibold ${subject.color}`} data-testid={`text-mastery-${subject.name.toLowerCase().replace(/\s+/g, "-")}`}>
+                    {subject.mastery}% Mastery
+                  </p>
+                </div>
+                <Button 
+                  size="lg" 
+                  onClick={() => handleGeneratePractice(subject.name)}
+                  className="transition-all duration-200"
+                  data-testid={`button-generate-${subject.name.toLowerCase().replace(/\s+/g, "-")}`}
+                >
+                  Generate Practice Set
+                </Button>
               </div>
-              <Button 
-                size="lg" 
-                onClick={() => handleGeneratePractice(subject.name)}
-                data-testid={`button-generate-${subject.name.toLowerCase().replace(/\s+/g, "-")}`}
-              >
-                Generate Practice Set
-              </Button>
             </Card>
           ))}
         </div>

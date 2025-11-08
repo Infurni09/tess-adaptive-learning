@@ -14,7 +14,7 @@
   --border: 210 20% 85%;
   --card: 0 0% 100%;
   --card-foreground: 210 6% 12%;
-  --card-border: 210 15% 90%;
+  --card-border: 200 70% 85%;
   --sidebar: 0 0% 100%;
   --sidebar-foreground: 210 6% 12%;
   --sidebar-border: 210 10% 90%;
@@ -53,14 +53,14 @@
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
   --radius: .5rem;
-  --shadow-2xs: 0px 2px 0px 0px hsl(210 5% 12% / 0.00);
-  --shadow-xs: 0px 2px 0px 0px hsl(210 5% 12% / 0.00);
-  --shadow-sm: 0px 2px 0px 0px hsl(210 5% 12% / 0.00), 0px 1px 2px -1px hsl(210 5% 12% / 0.00);
-  --shadow: 0px 2px 0px 0px hsl(210 5% 12% / 0.00), 0px 1px 2px -1px hsl(210 5% 12% / 0.00);
-  --shadow-md: 0px 2px 0px 0px hsl(210 5% 12% / 0.00), 0px 2px 4px -1px hsl(210 5% 12% / 0.00);
-  --shadow-lg: 0px 2px 0px 0px hsl(210 5% 12% / 0.00), 0px 4px 6px -1px hsl(210 5% 12% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(210 5% 12% / 0.00), 0px 8px 10px -1px hsl(210 5% 12% / 0.00);
-  --shadow-2xl: 0px 2px 0px 0px hsl(210 5% 12% / 0.00);
+  --shadow-2xs: 0px 1px 2px 0px hsl(210 50% 50% / 0.05);
+  --shadow-xs: 0px 1px 2px 0px hsl(210 50% 50% / 0.06);
+  --shadow-sm: 0px 1px 3px 0px hsl(210 50% 50% / 0.08), 0px 1px 2px -1px hsl(210 50% 50% / 0.06);
+  --shadow: 0px 2px 4px 0px hsl(210 50% 50% / 0.10), 0px 1px 2px -1px hsl(210 50% 50% / 0.06);
+  --shadow-md: 0px 4px 6px -1px hsl(210 50% 50% / 0.10), 0px 2px 4px -2px hsl(210 50% 50% / 0.05);
+  --shadow-lg: 0px 10px 15px -3px hsl(210 50% 50% / 0.10), 0px 4px 6px -4px hsl(210 50% 50% / 0.05);
+  --shadow-xl: 0px 20px 25px -5px hsl(210 50% 50% / 0.10), 0px 8px 10px -6px hsl(210 50% 50% / 0.04);
+  --shadow-2xl: 0px 25px 50px -12px hsl(210 50% 50% / 0.15);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 

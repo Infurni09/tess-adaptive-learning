@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, ArrowRight, Briefcase } from "lucide-react";
+import { ArrowLeft, ArrowRight, Briefcase, Clock } from "lucide-react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Practice() {
@@ -153,29 +154,30 @@ export default function Practice() {
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <Briefcase className="h-8 w-8" />
-            <h1 className="text-3xl font-bold" data-testid="text-test-title">
+            <h1 className="text-3xl font-bold tracking-tight" data-testid="text-test-title">
               DECA Testing Diagnostic
             </h1>
           </div>
-          <div className="text-2xl font-semibold text-success" data-testid="text-timer">
+          <Badge className="text-lg bg-success/10 text-success border-success/20" data-testid="text-timer">
+            <Clock className="h-4 w-4 mr-2" />
             {formatTime(timeRemaining)}
-          </div>
+          </Badge>
         </div>
 
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <Progress value={progress} className="flex-1" />
-            <span className="ml-4 text-lg font-semibold" data-testid="text-progress">
+        <div className="mb-8">
+          <div className="flex items-center gap-4 mb-2">
+            <Progress value={progress} className="flex-1 h-3 transition-all duration-300" />
+            <span className="text-lg font-semibold min-w-[4rem] text-right" data-testid="text-progress">
               {Math.round(progress)}%
             </span>
           </div>
         </div>
 
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-6" data-testid="text-question">
+        <Card className="p-8 mb-8 shadow-md border-card-border transition-all duration-200">
+          <h2 className="text-xl font-semibold mb-8 leading-relaxed" data-testid="text-question">
             {currentQuestion + 1}. {currentQ.questionText}
           </h2>
 
@@ -184,21 +186,21 @@ export default function Practice() {
               <button
                 key={index}
                 onClick={() => handleAnswerSelect(index)}
-                className={`w-full p-4 text-left rounded-lg border-2 transition-colors hover-elevate active-elevate-2 ${
+                className={`w-full p-5 text-left rounded-lg border-2 transition-all duration-200 hover-elevate active-elevate-2 ${
                   currentSelectedAnswer === index
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-card"
+                    ? "border-primary bg-primary/10 shadow-sm"
+                    : "border-border bg-card shadow-sm"
                 }`}
                 data-testid={`button-answer-${index}`}
               >
-                <span className="font-semibold mr-3">
+                <span className="font-semibold mr-3 text-base">
                   {String.fromCharCode(65 + index)}.
                 </span>
-                {answer}
+                <span className="text-base">{answer}</span>
               </button>
             ))}
           </div>
-        </div>
+        </Card>
 
         <div className="flex items-center justify-between">
           <Button
@@ -206,6 +208,7 @@ export default function Practice() {
             size="lg"
             onClick={handlePrevious}
             disabled={currentQuestion === 0}
+            className="transition-all duration-200"
             data-testid="button-previous"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -217,6 +220,7 @@ export default function Practice() {
               size="lg"
               onClick={handleSubmit}
               disabled={Object.keys(selectedAnswers).length === 0}
+              className="transition-all duration-200"
               data-testid="button-submit"
             >
               Submit Test
@@ -225,6 +229,7 @@ export default function Practice() {
             <Button
               size="lg"
               onClick={handleNext}
+              className="transition-all duration-200"
               data-testid="button-next"
             >
               Next
