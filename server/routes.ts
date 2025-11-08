@@ -218,10 +218,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let questions;
       if (topicFilter) {
-        questions = await storage.getQuestionsByTopic(topicFilter, 20);
+        questions = await storage.getQuestionsByTopic(topicFilter, 20, eventType);
       } else if (weakTopics.length > 0) {
         // Mix questions from weak topics
-        questions = await storage.getQuestionsByTopic(weakTopics[0], 20);
+        questions = await storage.getQuestionsByTopic(weakTopics[0], 20, eventType);
       } else {
         questions = await storage.getRandomQuestions(20, undefined, undefined, eventType);
       }

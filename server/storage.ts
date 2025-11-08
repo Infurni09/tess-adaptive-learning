@@ -103,9 +103,13 @@ export class DatabaseStorage implements IStorage {
     return question;
   }
 
-  async getQuestionsByTopic(topic: string, limit: number): Promise<Question[]> {
+  async getQuestionsByTopic(topic: string, limit: number, testType: string = "DECA"): Promise<Question[]> {
+    // IMPORTANT: Questions are filtered by testType - DECA and FBLA NEVER mix
     return db.select().from(questions)
-      .where(eq(questions.topic, topic))
+      .where(and(
+        eq(questions.topic, topic),
+        eq(questions.testType, testType)
+      ))
       .orderBy(sql`RANDOM()`)
       .limit(limit);
   }
