@@ -4,7 +4,13 @@
 
 TESS is an adaptive learning platform designed for business education students preparing for DECA and FBLA competitions. The system provides diagnostic testing, adaptive practice generation, and comprehensive performance analytics to help students identify knowledge gaps and improve their exam readiness through targeted practice.
 
-The platform offers a complete learning workflow: students take diagnostic tests to establish baseline performance, receive adaptive practice sets targeting weak areas, and track their progress through detailed analytics dashboards. The system manages multiple business education subjects including Finance, Marketing, Business Administration, Hospitality & Tourism, and Entrepreneurship.
+The platform offers a complete learning workflow: students take 100-question diagnostic tests to establish baseline performance, receive adaptive practice sets targeting weak areas, and track their progress through detailed analytics dashboards. The system manages multiple business education subjects including Finance, Marketing, Business Administration, Hospitality & Tourism, and Entrepreneurship.
+
+**Core Features:**
+- **100-Question Diagnostic Tests**: Comprehensive assessment with timer, progress tracking, and full question navigation
+- **Real-Time Analytics**: Dashboard displays DECA/FBLA performance by subject with weak topic identification
+- **Adaptive Practice**: Targeted practice sessions based on diagnostic results
+- **Performance Tracking**: Detailed analytics showing strengths, weaknesses, and improvement trends
 
 ## User Preferences
 
@@ -18,7 +24,14 @@ Preferred communication style: Simple, everyday language.
 
 **Design Philosophy**: The application follows a "reference-based hybrid" approach drawing inspiration from Khan Academy's clarity, Linear's polished interfaces, and Notion's content organization. Typography uses Inter/DM Sans as primary fonts with Source Sans Pro for dense content areas. The design system emphasizes credibility and sophistication suitable for educational contexts.
 
-**Component Structure**: The application uses a component-based architecture with reusable UI components (`MetricCard`, `QuestionCard`, `DiagnosticTestCard`, `TopicPill`) and page-level components for major features (Dashboard, Practice, Analytics, AdaptivePractice). A sidebar navigation pattern provides access to major platform features.
+**Component Structure**: The application uses a component-based architecture with reusable UI components (`MetricCard`, `QuestionCard`, `DiagnosticTestCard`, `TopicPill`) and page-level components for major features (Dashboard, Practice, Analytics, AdaptivePractice, DiagnosticTest). A sidebar navigation pattern provides access to major platform features.
+
+**Pages:**
+- **DiagnosticTest** (`/diagnostic-test`): 100-question comprehensive assessment with full navigation, progress tracking, timer (150 minutes), and answer persistence. Accessed via "Diagnostic Engine" in sidebar.
+- **Dashboard** (`/dashboard`): Real-time analytics showing DECA/FBLA performance by subject
+- **Practice** (`/practice`): Practice session interface
+- **AdaptivePractice** (`/adaptive-practice`): Targeted practice based on weak topics
+- **Analytics** (`/analytics`): Proficiency tracking and detailed performance insights
 
 **State Management**: React Query (TanStack Query) handles server state management, providing caching, background updates, and optimistic updates for API interactions. Local component state is managed with React hooks.
 
@@ -30,8 +43,12 @@ Preferred communication style: Simple, everyday language.
 
 **API Design**: RESTful API architecture with routes organized by feature domain:
 - Authentication endpoints (`/api/auth/*`)
+- Diagnostic test operations:
+  - POST `/api/diagnostic-tests` - Create new diagnostic test
+  - GET `/api/diagnostic-tests/:id/questions` - Fetch 100 random questions for test
+  - POST `/api/diagnostic-tests/:id/submit` - Submit answers in format `{ answers: { questionId: selectedAnswer } }`
+  - GET `/api/analytics/diagnostics?type=DECA|FBLA` - Get diagnostic analytics by test type
 - Practice session management (`/api/practice-sessions/*`)
-- Diagnostic test operations
 - Analytics and performance tracking
 
 **Session Management**: Cookie-based session authentication using express-session with PostgreSQL session store (connect-pg-simple). Session data tracks authenticated users throughout their learning journey.
