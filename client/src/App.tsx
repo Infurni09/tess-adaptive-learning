@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
@@ -20,11 +21,31 @@ function Router() {
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Login} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/diagnostic-test" component={DiagnosticTest} />
-      <Route path="/practice" component={Practice} />
-      <Route path="/analytics" component={Analytics} />
-      <Route path="/adaptive-practice" component={AdaptivePractice} />
+      <Route path="/dashboard">
+        <ProtectedRoute>
+          <Dashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/diagnostic-test">
+        <ProtectedRoute>
+          <DiagnosticTest />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/practice">
+        <ProtectedRoute>
+          <Practice />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/analytics">
+        <ProtectedRoute>
+          <Analytics />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/adaptive-practice">
+        <ProtectedRoute>
+          <AdaptivePractice />
+        </ProtectedRoute>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

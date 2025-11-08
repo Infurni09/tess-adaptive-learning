@@ -1,4 +1,4 @@
-import { Settings, Sparkles, Clipboard, BarChart, Eye, FileText } from "lucide-react";
+import { Settings, Sparkles, Clipboard, BarChart, Eye, FileText, LogOut } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -8,7 +8,12 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
+import { useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 
 const menuItems = [
   {
@@ -44,13 +49,34 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const { user } = useAuth();
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Logout failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.clear();
+      setLocation("/login");
+    },
+  });
 
   return (
     <Sidebar>
       <SidebarContent>
         <div className="p-6 border-b">
           <h1 className="text-4xl font-bold text-primary" data-testid="text-logo">tess</h1>
+          {user && (
+            <p className="text-sm text-muted-foreground mt-2" data-testid="text-username">
+              {user.username}
+            </p>
+          )}
         </div>
         <SidebarGroup>
           <SidebarGroupContent className="pt-4">
@@ -73,6 +99,20 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      {user && (
+        <SidebarFooter className="p-4 border-t">
+          <Button
+            variant="outline"
+            onClick={() => logoutMutation.mutate()}
+            disabled={logoutMutation.isPending}
+            className="w-full gap-2"
+            data-testid="button-logout"
+          >
+            <LogOut className="h-4 w-4" />
+            {logoutMutation.isPending ? "Logging out..." : "Logout"}
+          </Button>
+        </SidebarFooter>
+      )}
     </Sidebar>
   );
 }
