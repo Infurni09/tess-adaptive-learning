@@ -79,9 +79,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.get("/api/auth/me", requireAuth, async (req, res) => {
+  app.get("/api/auth/me", async (req, res) => {
     try {
-      const user = await storage.getUser(req.session.userId!);
+      // Return null user if not authenticated (no 401 error)
+      if (!req.session?.userId) {
+        return res.json({ user: null });
+      }
+      const user = await storage.getUser(req.session.userId);
       res.json({ user });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
