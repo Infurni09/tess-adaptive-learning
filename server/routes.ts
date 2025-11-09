@@ -34,8 +34,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid username or password" });
       }
 
+      // Set session and SAVE before responding
       req.session.userId = user.id;
-      res.json({ user: { id: user.id, username: user.username } });
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ error: "Session save failed" });
+        }
+        res.json({ user: { id: user.id, username: user.username } });
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -66,8 +73,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create new user
       const user = await storage.createUser({ username, password: hashedPassword, replitUserId: null });
 
+      // Set session and SAVE before responding
       req.session.userId = user.id;
-      res.json({ user: { id: user.id, username: user.username } });
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ error: "Session save failed" });
+        }
+        res.json({ user: { id: user.id, username: user.username } });
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
