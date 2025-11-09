@@ -164,8 +164,10 @@ All 2,485 DECA questions currently have subtopics generated. This provides stude
 - **React Hook Form**: Form state management with Zod schema validation
 
 ### Authentication
-- Session-based authentication using express-session
-- Optional Replit user integration for deployment on Replit platform
+- **Production**: OAuth-based authentication using Replit Auth (automatic setup with REPL_ID/ISSUER_URL env vars)
+- **Development**: OAuth gracefully disabled with 503 responses when env vars missing
+- Supports Google, GitHub, X, Apple, and email sign-in via OAuth 2.0
+- Session persistence with PostgreSQL session store (7-day expiration)
 
 ### Fonts
 - Google Fonts CDN: Inter, DM Sans, Architects Daughter, Fira Code, Geist Mono, Source Sans Pro
