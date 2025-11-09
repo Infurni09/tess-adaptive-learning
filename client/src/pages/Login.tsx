@@ -6,7 +6,7 @@ import { BookOpen } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
@@ -32,11 +32,15 @@ export default function Login() {
       return await response.json();
     },
     onSuccess: async () => {
+      // Clear the entire React Query cache to force fresh data
+      queryClient.clear();
+      
       toast({
         title: isRegister ? "Account Created!" : "Welcome!",
         description: isRegister ? "Your account has been created successfully" : "Successfully logged in",
       });
-      // Force page reload to ensure auth state is fresh
+      
+      // Force page reload to ensure auth state is completely fresh
       window.location.href = "/dashboard";
     },
     onError: (error: Error) => {
