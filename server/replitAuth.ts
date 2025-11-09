@@ -39,7 +39,7 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,
       maxAge: sessionTtl,
     },
   });
@@ -68,9 +68,9 @@ async function upsertUser(
 }
 
 export async function setupAuth(app: Express) {
-  // Check for required environment variables
-  if (!process.env.REPL_ID || !process.env.ISSUER_URL || !process.env.SESSION_SECRET || !process.env.DATABASE_URL) {
-    console.warn("OAuth not configured - required env vars missing. Login will not work.");
+  // Check for required environment variables (ISSUER_URL has a fallback to https://replit.com/oidc)
+  if (!process.env.REPL_ID || !process.env.SESSION_SECRET || !process.env.DATABASE_URL) {
+    console.warn("OAuth not configured - required env vars missing (REPL_ID, SESSION_SECRET, DATABASE_URL). Login will not work.");
     // Install stub middleware so req.isAuthenticated exists
     app.use((req: any, res, next) => {
       req.isAuthenticated = () => false;
