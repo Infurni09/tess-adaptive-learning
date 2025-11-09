@@ -1,38 +1,10 @@
 import express, { type Request, Response, NextFunction } from "express";
-import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
-import pg from "pg";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
-// Session configuration - require SESSION_SECRET to be set
-if (!process.env.SESSION_SECRET) {
-  throw new Error("SESSION_SECRET environment variable must be set for secure session management");
-}
-
-// PostgreSQL session store for persistent sessions across server restarts
-// Use standard pg Pool (not Neon serverless) for connect-pg-simple compatibility
-const PgStore = connectPgSimple(session);
-const pgPool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-
-app.use(session({
-  store: new PgStore({
-    pool: pgPool,
-    tableName: 'session',
-    createTableIfMissing: true,
-  }),
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days - extended from 1 week
-    sameSite: 'lax',
-  },
-}));
+// Session and auth now handled by Replit Auth in registerRoutes
 
 declare module 'http' {
   interface IncomingMessage {

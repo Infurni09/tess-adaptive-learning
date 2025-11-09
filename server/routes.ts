@@ -1,113 +1,43 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { z } from "zod";
-import bcrypt from "bcryptjs";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Simple session-based auth middleware
-  const requireAuth = (req: any, res: any, next: any) => {
-    if (!req.session?.userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    next();
-  };
+  // Setup Replit Auth (OAuth with Google/GitHub/email)
+  await setupAuth(app);
 
-  // Auth routes
-  app.post("/api/auth/login", async (req, res) => {
+  // Auth endpoint - returns current user from OAuth session
+  app.get('/api/auth/user', async (req: any, res) => {
     try {
-      const { username, password } = req.body;
-      
-      if (!username || !password) {
-        return res.status(400).json({ error: "Username and password required" });
+      if (!req.isAuthenticated() || !req.user?.claims?.sub) {
+        return res.json(null);
       }
-
-      const user = await storage.getUserByUsername(username);
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
       
       if (!user) {
-        return res.status(401).json({ error: "Invalid username or password" });
+        return res.json(null);
       }
-
-      // Verify password
-      const isValid = await bcrypt.compare(password, user.password);
-      if (!isValid) {
-        return res.status(401).json({ error: "Invalid username or password" });
-      }
-
-      // Set session and SAVE before responding
-      req.session.userId = user.id;
-      req.session.save((err) => {
-        if (err) {
-          console.error("Session save error:", err);
-          return res.status(500).json({ error: "Session save failed" });
-        }
-        res.json({ user: { id: user.id, username: user.username } });
-      });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Registration route
-  app.post("/api/auth/register", async (req, res) => {
-    try {
-      const { username, password } = req.body;
       
-      if (!username || !password) {
-        return res.status(400).json({ error: "Username and password required" });
-      }
-
-      if (password.length < 6) {
-        return res.status(400).json({ error: "Password must be at least 6 characters" });
-      }
-
-      // Check if user already exists
-      const existingUser = await storage.getUserByUsername(username);
-      if (existingUser) {
-        return res.status(409).json({ error: "Username already taken" });
-      }
-
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      // Create new user
-      const user = await storage.createUser({ username, password: hashedPassword, replitUserId: null });
-
-      // Set session and SAVE before responding
-      req.session.userId = user.id;
-      req.session.save((err) => {
-        if (err) {
-          console.error("Session save error:", err);
-          return res.status(500).json({ error: "Session save failed" });
-        }
-        res.json({ user: { id: user.id, username: user.username } });
-      });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy(() => {
-      res.json({ success: true });
-    });
-  });
-
-  app.get("/api/auth/me", async (req, res) => {
-    try {
-      // Return null user if not authenticated (no 401 error)
-      if (!req.session?.userId) {
-        return res.json({ user: null });
-      }
-      const user = await storage.getUser(req.session.userId);
-      res.json({ user });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      // Sanitize user object - exclude password and other sensitive fields
+      const safeUser = {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        profileImageUrl: user.profileImageUrl,
+      };
+      
+      res.json(safeUser);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
     }
   });
 
   // Question routes
-  app.get("/api/questions/random", requireAuth, async (req, res) => {
+  app.get("/api/questions/random", isAuthenticated, async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 10;
       const subject = req.query.subject as string | undefined;
@@ -122,7 +52,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/questions/:id", requireAuth, async (req, res) => {
+  app.get("/api/questions/:id", isAuthenticated, async (req, res) => {
     try {
       const question = await storage.getQuestionById(req.params.id);
       if (!question) {
@@ -135,7 +65,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Diagnostic test routes
-  app.post("/api/diagnostic-tests", requireAuth, async (req, res) => {
+  app.post("/api/diagnostic-tests", isAuthenticated, async (req, res) => {
     try {
       const { testNumber, testType } = req.body;
       
@@ -145,7 +75,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // IMPORTANT: testType (DECA or FBLA) separates question sets - they NEVER mix
       const test = await storage.createDiagnosticTest(
-        req.session.userId!, 
+        (req.user as any).claims.sub!, 
         testNumber,
         testType || "DECA"
       );
@@ -156,22 +86,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/diagnostic-tests", requireAuth, async (req, res) => {
+  app.get("/api/diagnostic-tests", isAuthenticated, async (req, res) => {
     try {
-      const tests = await storage.getUserDiagnosticTests(req.session.userId!);
+      const tests = await storage.getUserDiagnosticTests((req.user as any).claims.sub!);
       res.json({ tests });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.get("/api/diagnostic-tests/:id", requireAuth, async (req, res) => {
+  app.get("/api/diagnostic-tests/:id", isAuthenticated, async (req, res) => {
     try {
       const test = await storage.getDiagnosticTest(req.params.id);
       if (!test) {
         return res.status(404).json({ error: "Test not found" });
       }
-      if (test.userId !== req.session.userId) {
+      if (test.userId !== (req.user as any).claims.sub) {
         return res.status(403).json({ error: "Forbidden" });
       }
       res.json({ test });
@@ -180,13 +110,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/diagnostic-tests/:id/questions", requireAuth, async (req, res) => {
+  app.get("/api/diagnostic-tests/:id/questions", isAuthenticated, async (req, res) => {
     try {
       const test = await storage.getDiagnosticTest(req.params.id);
       if (!test) {
         return res.status(404).json({ error: "Test not found" });
       }
-      if (test.userId !== req.session.userId) {
+      if (test.userId !== (req.user as any).claims.sub) {
         return res.status(403).json({ error: "Forbidden" });
       }
       
@@ -199,7 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/diagnostic-tests/:id/submit", requireAuth, async (req, res) => {
+  app.post("/api/diagnostic-tests/:id/submit", isAuthenticated, async (req, res) => {
     try {
       const { answers } = req.body; // { questionId: selectedAnswer }
       
@@ -215,7 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!test) {
         return res.status(404).json({ error: "Test not found" });
       }
-      if (test.userId !== req.session.userId) {
+      if (test.userId !== (req.user as any).claims.sub) {
         return res.status(403).json({ error: "Forbidden" });
       }
 
@@ -245,7 +175,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update subtopic performance (event-specific and subject-specific)
         // Use subtopic if available (more granular), otherwise fall back to topic
         const performanceTopic = question.subtopic || question.topic;
-        await storage.updateTopicPerformance(req.session.userId!, performanceTopic, isCorrect);
+        await storage.updateTopicPerformance((req.user as any).claims.sub!, performanceTopic, isCorrect);
 
         results.push({
           questionId,
@@ -264,17 +194,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Practice session routes
-  app.post("/api/practice-sessions", requireAuth, async (req, res) => {
+  app.post("/api/practice-sessions", isAuthenticated, async (req, res) => {
     try {
       const { topicFilter, testType } = req.body;
       
       // IMPORTANT: testType separates DECA and FBLA - they NEVER mix
       const eventType = testType || "DECA";
-      const session = await storage.createPracticeSession(req.session.userId!, topicFilter, eventType);
+      const session = await storage.createPracticeSession((req.user as any).claims.sub!, topicFilter, eventType);
       
       // Get questions based on weak topics or random
       // CRITICAL: Filter performance by event type to prevent DECA/FBLA mixing
-      const performance = await storage.getTopicPerformance(req.session.userId!);
+      const performance = await storage.getTopicPerformance((req.user as any).claims.sub!);
       const weakTopics = performance
         .filter(p => p.averageScore < 70 && p.topic.startsWith(eventType + "-"))
         .sort((a, b) => a.averageScore - b.averageScore)
@@ -297,7 +227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/practice-sessions/:id/submit", requireAuth, async (req, res) => {
+  app.post("/api/practice-sessions/:id/submit", isAuthenticated, async (req, res) => {
     try {
       const { answers } = req.body;
       
@@ -307,7 +237,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!session) {
         return res.status(404).json({ error: "Practice session not found" });
       }
-      if (session.userId !== req.session.userId) {
+      if (session.userId !== (req.user as any).claims.sub) {
         return res.status(403).json({ error: "Forbidden" });
       }
 
@@ -337,7 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update subtopic performance (event-specific and subject-specific)
         // Use subtopic if available (more granular), otherwise fall back to topic
         const performanceTopic = question.subtopic || question.topic;
-        await storage.updateTopicPerformance(req.session.userId!, performanceTopic, isCorrect);
+        await storage.updateTopicPerformance((req.user as any).claims.sub!, performanceTopic, isCorrect);
 
         results.push({
           questionId,
@@ -356,25 +286,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Analytics routes
-  app.get("/api/analytics/stats", requireAuth, async (req, res) => {
+  app.get("/api/analytics/stats", isAuthenticated, async (req, res) => {
     try {
-      const stats = await storage.getUserStats(req.session.userId!);
+      const stats = await storage.getUserStats((req.user as any).claims.sub!);
       res.json({ stats });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.get("/api/analytics/topics", requireAuth, async (req, res) => {
+  app.get("/api/analytics/topics", isAuthenticated, async (req, res) => {
     try {
-      const performance = await storage.getTopicPerformance(req.session.userId!);
+      const performance = await storage.getTopicPerformance((req.user as any).claims.sub!);
       res.json({ performance });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.get("/api/analytics/diagnostics", requireAuth, async (req, res) => {
+  app.get("/api/analytics/diagnostics", isAuthenticated, async (req, res) => {
     try {
       const testType = req.query.type as 'DECA' | 'FBLA' | undefined;
       
@@ -382,7 +312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid test type. Must be 'DECA' or 'FBLA'" });
       }
 
-      const analytics = await storage.getDiagnosticAnalytics(req.session.userId!, testType);
+      const analytics = await storage.getDiagnosticAnalytics((req.user as any).claims.sub!, testType);
       res.json(analytics);
     } catch (error: any) {
       res.status(500).json({ error: error.message });

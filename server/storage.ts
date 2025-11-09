@@ -2,7 +2,7 @@ import { db } from "./db";
 import { 
   users, questions, diagnosticTests, testResponses, 
   practiceSessions, practiceResponses, topicPerformance,
-  type User, type InsertUser, type Question, type DiagnosticTest,
+  type User, type InsertUser, type UpsertUser, type Question, type DiagnosticTest,
   type TestResponse, type PracticeSession, type TopicPerformance
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray, or } from "drizzle-orm";
@@ -13,6 +13,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByReplitId(replitUserId: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  upsertUser(user: UpsertUser): Promise<User>; // For Replit Auth OAuth
 
   // Question operations
   // IMPORTANT: testType parameter separates DECA and FBLA - they NEVER mix
@@ -78,6 +79,22 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  // Replit Auth OAuth upsert - creates or updates user based on OAuth claims
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
     return user;
   }
 
