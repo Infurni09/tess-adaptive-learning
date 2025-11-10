@@ -224,8 +224,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get available subjects for a given event type
-  app.get("/api/subjects", isAuthenticated, async (req, res) => {
+  // Get available subjects for a given event type (public endpoint - no auth required)
+  app.get("/api/subjects", async (req, res) => {
     try {
       const testType = (req.query.testType as string) || "DECA";
       const subjects = await storage.getAvailableSubjects(testType);
@@ -236,8 +236,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get available subtopics for a given event type and optional subject
-  app.get("/api/subtopics", isAuthenticated, async (req, res) => {
+  // Get available subtopics for a given event type and optional subject (public endpoint - no auth required)
+  app.get("/api/subtopics", async (req, res) => {
     try {
       const testType = (req.query.testType as string) || "DECA";
       const subject = req.query.subject as string | undefined;
