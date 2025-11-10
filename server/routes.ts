@@ -224,6 +224,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get available subtopics for a given event type
+  app.get("/api/subtopics", isAuthenticated, async (req, res) => {
+    try {
+      const testType = (req.query.testType as string) || "DECA";
+      const subtopics = await storage.getAvailableSubtopics(testType);
+      res.json({ subtopics });
+    } catch (error: any) {
+      console.error("[Subtopics] Error fetching subtopics:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Practice session routes
   app.post("/api/practice-sessions", isAuthenticated, async (req, res) => {
     try {

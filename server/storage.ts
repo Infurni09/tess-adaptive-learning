@@ -74,6 +74,9 @@ export interface IStorage {
     testType: string,
     limit: number
   ): Promise<Question[]>;
+  
+  // Get all unique subtopics for a given event type
+  getAvailableSubtopics(testType: string): Promise<Array<{ subtopic: string; subject: string; count: number }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -495,6 +498,28 @@ export class DatabaseStorage implements IStorage {
   ): Promise<Question[]> {
     const { getPrioritizedQuestions } = await import('./adaptiveLearning');
     return getPrioritizedQuestions(userId, testType, limit);
+  }
+
+  async getAvailableSubtopics(testType: string): Promise<Array<{ subtopic: string; subject: string; count: number }>> {
+    const result = await db
+      .select({
+        subtopic: questions.subtopic,
+        subject: questions.subject,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(questions)
+      .where(and(
+        eq(questions.testType, testType),
+        sql`${questions.subtopic} IS NOT NULL AND ${questions.subtopic} != ''`
+      ))
+      .groupBy(questions.subtopic, questions.subject)
+      .orderBy(questions.subject, questions.subtopic);
+    
+    return result.map(r => ({
+      subtopic: r.subtopic!,
+      subject: r.subject!,
+      count: r.count,
+    }));
   }
 }
 
