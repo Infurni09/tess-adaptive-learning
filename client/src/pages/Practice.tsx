@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, ArrowRight, Briefcase, Clock, Target, BookOpen, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Briefcase, Clock, Target, BookOpen, ChevronRight, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -9,15 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Input } from "@/components/ui/input";
 
 export default function Practice() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<{[key: string]: number}>({});
   const [testType, setTestType] = useState<string | null>(null);
-  const [selectedSubtopic, setSelectedSubtopic] = useState<string | null>(null);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(1500);
-  const [subtopicSearch, setSubtopicSearch] = useState("");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -25,12 +23,25 @@ export default function Practice() {
   const urlParams = new URLSearchParams(window.location.search);
   const urlSessionId = urlParams.get("sessionId");
 
-  // Fetch available subtopics when event type is selected
-  const { data: subtopicsData, isLoading: subtopicsLoading } = useQuery<{ subtopics: Array<{ subtopic: string; subject: string; count: number }> }>({
-    queryKey: ['/api/subtopics', testType],
-    enabled: !!testType && !urlSessionId && !selectedSubtopic,
+  // Fetch available subjects when event type is selected
+  const { data: subjectsData, isLoading: subjectsLoading } = useQuery<{ subjects: Array<{ subject: string; count: number }> }>({
+    queryKey: ['/api/subjects', testType],
+    enabled: !!testType && !urlSessionId && !selectedSubject,
     queryFn: async () => {
-      const res = await fetch(`/api/subtopics?testType=${testType}`, {
+      const res = await fetch(`/api/subjects?testType=${testType}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch subjects");
+      return res.json();
+    },
+  });
+
+  // Fetch subtopics when subject is selected
+  const { data: subtopicsData, isLoading: subtopicsLoading } = useQuery<{ subtopics: Array<{ subtopic: string; subject: string; count: number }> }>({
+    queryKey: ['/api/subtopics', testType, selectedSubject],
+    enabled: !!testType && !!selectedSubject && !urlSessionId,
+    queryFn: async () => {
+      const res = await fetch(`/api/subtopics?testType=${testType}&subject=${selectedSubject}`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch subtopics");
@@ -42,50 +53,42 @@ export default function Practice() {
     queryKey: ['/api/practice-sessions', urlSessionId],
     enabled: !!urlSessionId,
     queryFn: async () => {
-      console.log(`[Practice] Fetching session for sessionId: ${urlSessionId}`);
       const res = await fetch(`/api/practice-sessions/${urlSessionId}`, {
         credentials: "include",
       });
       
       if (!res.ok) {
         const errorText = await res.text();
-        console.error(`[Practice] Failed to fetch session. Status: ${res.status}, Error: ${errorText}`);
         throw new Error(`Failed to fetch session: ${res.status} ${errorText}`);
       }
       
-      const data = await res.json();
-      console.log(`[Practice] Successfully fetched session with ${data.questions?.length || 0} questions`);
-      return data;
+      return res.json();
     },
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   const createSessionMutation = useMutation({
-    mutationFn: async ({ testType: selectedTestType, topicFilter }: { testType: string; topicFilter?: string }) => {
-      console.log(`[Practice] Creating session for testType: ${selectedTestType}, topicFilter: ${topicFilter || 'none (adaptive)'}`);
+    mutationFn: async ({ testType: selectedTestType, topicFilter, practiceType }: { testType: string; topicFilter?: string; practiceType?: string }) => {
       const res = await fetch("/api/practice-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ 
           testType: selectedTestType,
-          topicFilter: topicFilter || undefined
+          topicFilter: topicFilter || undefined,
+          practiceType: practiceType || undefined
         }),
       });
       
       if (!res.ok) {
         const errorText = await res.text();
-        console.error(`[Practice] Failed to create session. Status: ${res.status}, Error: ${errorText}`);
         throw new Error(`Failed to create session: ${res.status}`);
       }
       
-      const data = await res.json();
-      console.log(`[Practice] Successfully created session with ${data.questions?.length || 0} questions`);
-      return data;
+      return res.json();
     },
     onError: (error: any) => {
-      setSelectedSubtopic(null);
       toast({
         title: "Error",
         description: "Failed to create practice session. Please try selecting a different topic.",
@@ -173,7 +176,7 @@ export default function Practice() {
   const formatSubtopicName = (subtopic: string) => {
     const parts = subtopic.split("-");
     if (parts.length >= 3) {
-      return parts.slice(1).join(" - ");
+      return parts.slice(2).join(" - ");
     }
     return subtopic;
   };
@@ -202,9 +205,9 @@ export default function Practice() {
                 Practice for DECA competitions
               </p>
               <ul className="space-y-2 text-sm">
-                <li>• Choose specific topics</li>
+                <li>• Choose by subject</li>
+                <li>• Pick specific topics</li>
                 <li>• 25 targeted questions</li>
-                <li>• Real-time feedback</li>
               </ul>
             </Card>
 
@@ -218,9 +221,9 @@ export default function Practice() {
                 Practice for FBLA competitions
               </p>
               <ul className="space-y-2 text-sm">
-                <li>• Choose specific topics</li>
+                <li>• Choose by subject</li>
+                <li>• Pick specific topics</li>
                 <li>• 25 targeted questions</li>
-                <li>• Real-time feedback</li>
               </ul>
             </Card>
           </div>
@@ -229,35 +232,22 @@ export default function Practice() {
     );
   }
 
-  // Step 2: Subtopic Selection
-  if (testType && !selectedSubtopic && !urlSessionId && !createSessionMutation.data) {
-    if (subtopicsLoading) {
+  // Step 2: Subject Selection
+  if (testType && !selectedSubject && !urlSessionId && !createSessionMutation.data) {
+    if (subjectsLoading) {
       return (
         <div className="min-h-screen p-8">
           <div className="max-w-6xl mx-auto">
             <Card className="p-8">
               <Skeleton className="h-64 w-full" />
-              <p className="text-center text-sm text-muted-foreground mt-4">Loading available topics...</p>
+              <p className="text-center text-sm text-muted-foreground mt-4">Loading subjects...</p>
             </Card>
           </div>
         </div>
       );
     }
 
-    const subtopics = subtopicsData?.subtopics || [];
-    const filteredSubtopics = subtopics.filter(s => 
-      formatSubtopicName(s.subtopic).toLowerCase().includes(subtopicSearch.toLowerCase()) ||
-      s.subject.toLowerCase().includes(subtopicSearch.toLowerCase())
-    );
-
-    // Group subtopics by subject
-    const subtopicsBySubject = filteredSubtopics.reduce((acc, item) => {
-      if (!acc[item.subject]) {
-        acc[item.subject] = [];
-      }
-      acc[item.subject].push(item);
-      return acc;
-    }, {} as Record<string, typeof subtopics>);
+    const subjects = subjectsData?.subjects || [];
 
     return (
       <div className="min-h-screen p-8">
@@ -273,74 +263,191 @@ export default function Practice() {
               Back to Event Selection
             </Button>
             
-            <div className="flex items-center gap-4 mb-4">
+            <div className="flex items-center gap-4 mb-6">
               <BookOpen className="h-10 w-10 text-primary" />
               <div>
-                <h1 className="text-3xl font-bold" data-testid="text-select-subtopic">
-                  Choose Topics to Practice
+                <h1 className="text-3xl font-bold" data-testid="text-select-subject">
+                  Choose a Subject
                 </h1>
                 <p className="text-muted-foreground">
-                  {testType} - Select a specific topic or use adaptive practice
+                  {testType} - Practice by subject or use adaptive learning
                 </p>
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <Input
-                placeholder="Search topics..."
-                value={subtopicSearch}
-                onChange={(e) => setSubtopicSearch(e.target.value)}
-                className="flex-1"
-                data-testid="input-search-subtopics"
-              />
-              <Button
-                onClick={() => {
-                  setSelectedSubtopic("adaptive");
-                  createSessionMutation.mutate({ testType, topicFilter: undefined });
-                }}
-                data-testid="button-adaptive-practice"
-                size="lg"
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <Card
+                className="p-6 hover-elevate cursor-pointer transition-all border-2 border-primary/20"
+                onClick={() => createSessionMutation.mutate({ testType, practiceType: 'event' })}
+                data-testid="button-practice-all-event"
               >
-                <Target className="h-4 w-4 mr-2" />
-                Adaptive Practice
-              </Button>
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-lg bg-primary/10">
+                    <Target className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold mb-2">Practice All {testType}</h3>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Random questions from all subjects
+                    </p>
+                    <Badge variant="secondary">Event-Level Practice</Badge>
+                  </div>
+                </div>
+              </Card>
+
+              <Card
+                className="p-6 hover-elevate cursor-pointer transition-all border-2 border-primary/20"
+                onClick={() => createSessionMutation.mutate({ testType })}
+                data-testid="button-adaptive-practice"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-lg bg-primary/10">
+                    <Sparkles className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold mb-2">Adaptive Practice</h3>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      ML-powered questions targeting your weak areas
+                    </p>
+                    <Badge variant="secondary">Personalized</Badge>
+                  </div>
+                </div>
+              </Card>
             </div>
           </div>
 
-          {Object.keys(subtopicsBySubject).length === 0 ? (
+          {subjects.length === 0 ? (
             <Card className="p-8 text-center">
-              <p className="text-muted-foreground">No topics found for {testType}.</p>
+              <p className="text-muted-foreground">No subjects found for {testType}.</p>
             </Card>
           ) : (
-            <div className="space-y-6">
-              {Object.entries(subtopicsBySubject).map(([subject, items]) => (
-                <Card key={subject} className="p-6">
-                  <h2 className="text-xl font-bold mb-4">{subject}</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {items.map((item, index) => (
-                      <Card
-                        key={item.subtopic}
-                        className="p-4 hover-elevate cursor-pointer transition-all"
-                        onClick={() => {
-                          setSelectedSubtopic(item.subtopic);
-                          createSessionMutation.mutate({ 
-                            testType, 
-                            topicFilter: item.subtopic 
-                          });
-                        }}
-                        data-testid={`card-subtopic-${index}`}
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Or choose a subject:</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {subjects.map((subject, index) => (
+                  <Card
+                    key={subject.subject}
+                    className="p-6 hover-elevate transition-all"
+                    data-testid={`card-subject-${index}`}
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <h3 className="text-lg font-semibold flex-1">{subject.subject}</h3>
+                      <Badge variant="secondary" className="text-xs">
+                        {subject.count} questions
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      <Button
+                        variant="default"
+                        className="w-full"
+                        onClick={() => createSessionMutation.mutate({ testType, topicFilter: subject.subject })}
+                        data-testid={`button-practice-subject-${index}`}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-medium text-sm flex-1">
-                            {formatSubtopicName(item.subtopic)}
-                          </h3>
-                          <Badge variant="secondary" className="text-xs">
-                            {item.count}
-                          </Badge>
-                        </div>
-                      </Card>
-                    ))}
+                        Practice All
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full gap-2"
+                        onClick={() => setSelectedSubject(subject.subject)}
+                        data-testid={`button-view-topics-${index}`}
+                      >
+                        View Topics
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Step 3: Subtopic Selection
+  if (testType && selectedSubject && !urlSessionId && !createSessionMutation.data) {
+    if (subtopicsLoading) {
+      return (
+        <div className="min-h-screen p-8">
+          <div className="max-w-6xl mx-auto">
+            <Card className="p-8">
+              <Skeleton className="h-64 w-full" />
+              <p className="text-center text-sm text-muted-foreground mt-4">Loading topics...</p>
+            </Card>
+          </div>
+        </div>
+      );
+    }
+
+    const subtopics = subtopicsData?.subtopics || [];
+
+    return (
+      <div className="min-h-screen p-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-8">
+            <Button 
+              variant="outline" 
+              onClick={() => setSelectedSubject(null)}
+              className="mb-4"
+              data-testid="button-back-to-subjects"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Subjects
+            </Button>
+            
+            <div className="flex items-center gap-4 mb-4">
+              <BookOpen className="h-10 w-10 text-primary" />
+              <div>
+                <h1 className="text-3xl font-bold" data-testid="text-select-topic">
+                  {selectedSubject} Topics
+                </h1>
+                <p className="text-muted-foreground">
+                  {testType} - Choose a specific topic to practice
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {subtopics.length === 0 ? (
+            <Card className="p-8 text-center">
+              <p className="text-muted-foreground">No topics found for {selectedSubject}.</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {subtopics.map((item, index) => (
+                <Card
+                  key={item.subtopic}
+                  className="p-5 hover-elevate cursor-pointer transition-all"
+                  onClick={() => createSessionMutation.mutate({ 
+                    testType, 
+                    topicFilter: item.subtopic 
+                  })}
+                  data-testid={`card-subtopic-${index}`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <h3 className="font-medium text-sm flex-1">
+                      {formatSubtopicName(item.subtopic)}
+                    </h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {item.count}
+                    </Badge>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      createSessionMutation.mutate({ 
+                        testType, 
+                        topicFilter: item.subtopic 
+                      });
+                    }}
+                  >
+                    <Target className="h-3 w-3 mr-2" />
+                    Practice
+                  </Button>
                 </Card>
               ))}
             </div>
@@ -358,10 +465,7 @@ export default function Practice() {
           <Card className="p-8">
             <Skeleton className="h-64 w-full" />
             <p className="text-center text-sm text-muted-foreground mt-4">
-              {selectedSubtopic === "adaptive" 
-                ? "Creating adaptive practice session..."
-                : "Loading your practice session..."
-              }
+              Creating your practice session...
             </p>
           </Card>
         </div>
@@ -381,7 +485,7 @@ export default function Practice() {
           </div>
           <h2 className="text-xl font-semibold mb-2">Failed to Load Practice Session</h2>
           <p className="text-muted-foreground mb-4">
-            {sessionFetchError?.message || createSessionMutation.error?.message || "Unable to load practice session. Please check your authentication and try again."}
+            {sessionFetchError?.message || createSessionMutation.error?.message || "Unable to load practice session."}
           </p>
           <div className="space-y-2">
             <Button 
@@ -412,10 +516,10 @@ export default function Practice() {
         <Card className="p-8 text-center">
           <p className="text-lg font-medium mb-4">No questions available</p>
           <p className="text-sm text-muted-foreground mb-4">
-            We couldn't find any questions for this practice session. Please try again or contact support.
+            We couldn't find any questions for this practice session. Please try a different selection.
           </p>
-          <Button onClick={() => setLocation("/dashboard")} data-testid="button-back-to-dashboard">
-            Return to Dashboard
+          <Button onClick={() => setLocation("/practice")} data-testid="button-back-to-practice">
+            Back to Practice Selection
           </Button>
         </Card>
       </div>
@@ -431,8 +535,8 @@ export default function Practice() {
         <div className="max-w-4xl mx-auto">
           <Card className="p-8 text-center">
             <p className="text-lg text-muted-foreground">No questions available. Please try again.</p>
-            <Button className="mt-4" onClick={() => setLocation("/dashboard")} data-testid="button-back-to-dashboard">
-              Back to Dashboard
+            <Button className="mt-4" onClick={() => setLocation("/practice")} data-testid="button-back-to-practice">
+              Back to Practice Selection
             </Button>
           </Card>
         </div>
@@ -440,7 +544,7 @@ export default function Practice() {
     );
   }
 
-  // Step 3: Practice Session (Question Display)
+  // Step 4: Practice Session (Question Display)
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-4xl mx-auto">

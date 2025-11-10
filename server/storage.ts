@@ -75,8 +75,14 @@ export interface IStorage {
     limit: number
   ): Promise<Question[]>;
   
-  // Get all unique subtopics for a given event type
-  getAvailableSubtopics(testType: string): Promise<Array<{ subtopic: string; subject: string; count: number }>>;
+  // Get questions by subject (for subject-level practice)
+  getQuestionsBySubject(subject: string, limit: number, testType: string): Promise<Question[]>;
+  
+  // Get all unique subtopics for a given event type, optionally filtered by subject
+  getAvailableSubtopics(testType: string, subject?: string): Promise<Array<{ subtopic: string; subject: string; count: number }>>;
+  
+  // Get all unique subjects for a given event type with question counts
+  getAvailableSubjects(testType: string): Promise<Array<{ subject: string; count: number }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -153,6 +159,17 @@ export class DatabaseStorage implements IStorage {
           eq(questions.topic, topic),
           eq(questions.subtopic, topic)
         ),
+        eq(questions.testType, testType)
+      ))
+      .orderBy(sql`RANDOM()`)
+      .limit(limit);
+  }
+
+  async getQuestionsBySubject(subject: string, limit: number, testType: string = "DECA"): Promise<Question[]> {
+    // Filter questions by subject and testType for subject-level practice
+    return db.select().from(questions)
+      .where(and(
+        eq(questions.subject, subject),
         eq(questions.testType, testType)
       ))
       .orderBy(sql`RANDOM()`)
@@ -500,7 +517,17 @@ export class DatabaseStorage implements IStorage {
     return getPrioritizedQuestions(userId, testType, limit);
   }
 
-  async getAvailableSubtopics(testType: string): Promise<Array<{ subtopic: string; subject: string; count: number }>> {
+  async getAvailableSubtopics(testType: string, subject?: string): Promise<Array<{ subtopic: string; subject: string; count: number }>> {
+    const conditions = [
+      eq(questions.testType, testType),
+      sql`${questions.subtopic} IS NOT NULL AND ${questions.subtopic} != ''`
+    ];
+    
+    // Filter by subject in SQL if provided (not in memory)
+    if (subject) {
+      conditions.push(eq(questions.subject, subject));
+    }
+    
     const result = await db
       .select({
         subtopic: questions.subtopic,
@@ -508,15 +535,29 @@ export class DatabaseStorage implements IStorage {
         count: sql<number>`count(*)::int`,
       })
       .from(questions)
-      .where(and(
-        eq(questions.testType, testType),
-        sql`${questions.subtopic} IS NOT NULL AND ${questions.subtopic} != ''`
-      ))
+      .where(and(...conditions))
       .groupBy(questions.subtopic, questions.subject)
       .orderBy(questions.subject, questions.subtopic);
     
     return result.map(r => ({
       subtopic: r.subtopic!,
+      subject: r.subject!,
+      count: r.count,
+    }));
+  }
+
+  async getAvailableSubjects(testType: string): Promise<Array<{ subject: string; count: number }>> {
+    const result = await db
+      .select({
+        subject: questions.subject,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(questions)
+      .where(eq(questions.testType, testType))
+      .groupBy(questions.subject)
+      .orderBy(questions.subject);
+    
+    return result.map(r => ({
       subject: r.subject!,
       count: r.count,
     }));

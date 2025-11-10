@@ -224,11 +224,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get available subtopics for a given event type
+  // Get available subjects for a given event type
+  app.get("/api/subjects", isAuthenticated, async (req, res) => {
+    try {
+      const testType = (req.query.testType as string) || "DECA";
+      const subjects = await storage.getAvailableSubjects(testType);
+      res.json({ subjects });
+    } catch (error: any) {
+      console.error("[Subjects] Error fetching subjects:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get available subtopics for a given event type and optional subject
   app.get("/api/subtopics", isAuthenticated, async (req, res) => {
     try {
       const testType = (req.query.testType as string) || "DECA";
-      const subtopics = await storage.getAvailableSubtopics(testType);
+      const subject = req.query.subject as string | undefined;
+      
+      // Filter by subject in SQL (not in memory) for performance
+      const subtopics = await storage.getAvailableSubtopics(testType, subject);
+      
       res.json({ subtopics });
     } catch (error: any) {
       console.error("[Subtopics] Error fetching subtopics:", error);
@@ -239,7 +255,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Practice session routes
   app.post("/api/practice-sessions", isAuthenticated, async (req, res) => {
     try {
-      const { topicFilter, testType } = req.body;
+      const { topicFilter, testType, practiceType } = req.body;
       
       // IMPORTANT: testType separates DECA and FBLA - they NEVER mix
       const eventType = testType || "DECA";
@@ -247,14 +263,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const session = await storage.createPracticeSession(userId, topicFilter, eventType);
       
       let questions;
+      const TARGET_QUESTION_COUNT = 25;
+      
       if (topicFilter) {
-        // If specific topic filter is provided, use topic-based questions
-        questions = await storage.getQuestionsByTopic(topicFilter, 25, eventType);
-        console.log(`[Practice Session] Using topic filter: ${topicFilter}, got ${questions.length} questions`);
+        // Determine if this is subject-level or subtopic-level based on filter format
+        // Subject: "Marketing", "Finance" (no hyphen)
+        // Subtopic: "DECA-Marketing-Product" (contains hyphen)
+        if (topicFilter.includes("-")) {
+          // Subtopic-level practice with cascading fallback
+          questions = await storage.getQuestionsByTopic(topicFilter, TARGET_QUESTION_COUNT, eventType);
+          console.log(`[Practice Session] Subtopic filter: ${topicFilter}, got ${questions.length} questions`);
+          
+          // Cascading backfill to guarantee 25 questions
+          if (questions.length < TARGET_QUESTION_COUNT) {
+            const parts = topicFilter.split("-");
+            const subject = parts[1]; // Extract subject from "DECA-Finance-Analysis"
+            let existingIds = new Set(questions.map(q => q.id));
+            
+            // Step 1: Backfill from parent subject
+            console.log(`[Practice Session] Backfilling from subject: ${subject} (need ${TARGET_QUESTION_COUNT - questions.length} more)`);
+            const subjectQuestions = await storage.getQuestionsBySubject(subject, 100, eventType); // Get more to filter
+            const fromSubject = subjectQuestions.filter(q => !existingIds.has(q.id));
+            questions = [...questions, ...fromSubject];
+            
+            // Step 2: If still not enough, backfill from entire event
+            if (questions.length < TARGET_QUESTION_COUNT) {
+              existingIds = new Set(questions.map(q => q.id));
+              console.log(`[Practice Session] Still need ${TARGET_QUESTION_COUNT - questions.length} more, backfilling from entire ${eventType} event`);
+              const eventQuestions = await storage.getRandomQuestions(100, undefined, undefined, eventType);
+              const fromEvent = eventQuestions.filter(q => !existingIds.has(q.id));
+              questions = [...questions, ...fromEvent];
+            }
+            
+            questions = questions.slice(0, TARGET_QUESTION_COUNT);
+            console.log(`[Practice Session] After cascading backfill: ${questions.length} questions total`);
+          }
+        } else {
+          // Subject-level practice with event-level fallback
+          questions = await storage.getQuestionsBySubject(topicFilter, TARGET_QUESTION_COUNT, eventType);
+          console.log(`[Practice Session] Subject filter: ${topicFilter}, got ${questions.length} questions`);
+          
+          // Fallback to event-level if subject has insufficient questions
+          if (questions.length < TARGET_QUESTION_COUNT) {
+            const existingIds = new Set(questions.map(q => q.id));
+            console.log(`[Practice Session] Subject has only ${questions.length} questions, backfilling from ${eventType} event`);
+            const eventQuestions = await storage.getRandomQuestions(100, undefined, undefined, eventType);
+            const fromEvent = eventQuestions.filter(q => !existingIds.has(q.id));
+            questions = [...questions, ...fromEvent].slice(0, TARGET_QUESTION_COUNT);
+            console.log(`[Practice Session] After event backfill: ${questions.length} questions total`);
+          }
+        }
+      } else if (practiceType === 'event') {
+        // Event-level practice: all questions from the event
+        questions = await storage.getRandomQuestions(TARGET_QUESTION_COUNT, undefined, undefined, eventType);
+        console.log(`[Practice Session] Event-level practice for ${eventType}, got ${questions.length} questions`);
       } else {
-        // Use ML-based adaptive practice to get prioritized questions
+        // ML-based adaptive practice (default when no filter and no practiceType)
         console.log(`[Practice Session] Using adaptive learning for user ${userId}, testType: ${eventType}`);
-        questions = await storage.getQuestionsForAdaptivePractice(userId, eventType, 25);
+        questions = await storage.getQuestionsForAdaptivePractice(userId, eventType, TARGET_QUESTION_COUNT);
         console.log(`[Practice Session] Adaptive learning returned ${questions.length} prioritized questions`);
       }
 
