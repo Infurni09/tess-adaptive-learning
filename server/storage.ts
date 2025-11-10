@@ -2,10 +2,12 @@ import { db } from "./db";
 import { 
   users, questions, diagnosticTests, testResponses, 
   practiceSessions, practiceResponses, topicPerformance,
+  questionDifficultyHistory, userQuestionHistory,
   type User, type InsertUser, type UpsertUser, type Question, type DiagnosticTest,
-  type TestResponse, type PracticeSession, type TopicPerformance
+  type TestResponse, type PracticeSession, type TopicPerformance,
+  type QuestionDifficultyHistory, type UserQuestionHistory
 } from "@shared/schema";
-import { eq, and, desc, sql, inArray, or } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, or, gte } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -58,6 +60,20 @@ export interface IStorage {
     overallScore: number;
     completedTests: number;
   }>;
+
+  // Adaptive Learning operations
+  getQuestionDifficultyHistory(questionId: string, limit?: number): Promise<QuestionDifficultyHistory[]>;
+  getUserQuestionHistory(userId: string, questionId?: string): Promise<UserQuestionHistory[]>;
+  updateUserQuestionHistory(
+    userId: string,
+    questionId: string,
+    data: Partial<UserQuestionHistory>
+  ): Promise<void>;
+  getQuestionsForAdaptivePractice(
+    userId: string,
+    testType: string,
+    limit: number
+  ): Promise<Question[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -412,6 +428,73 @@ export class DatabaseStorage implements IStorage {
       overallScore,
       completedTests,
     };
+  }
+
+  // Adaptive Learning operations
+  async getQuestionDifficultyHistory(questionId: string, limit: number = 10): Promise<QuestionDifficultyHistory[]> {
+    return db.select()
+      .from(questionDifficultyHistory)
+      .where(eq(questionDifficultyHistory.questionId, questionId))
+      .orderBy(desc(questionDifficultyHistory.windowEnd))
+      .limit(limit);
+  }
+
+  async getUserQuestionHistory(userId: string, questionId?: string): Promise<UserQuestionHistory[]> {
+    const conditions = [eq(userQuestionHistory.userId, userId)];
+    
+    if (questionId) {
+      conditions.push(eq(userQuestionHistory.questionId, questionId));
+    }
+
+    return db.select()
+      .from(userQuestionHistory)
+      .where(and(...conditions))
+      .orderBy(desc(userQuestionHistory.lastSeen));
+  }
+
+  async updateUserQuestionHistory(
+    userId: string,
+    questionId: string,
+    data: Partial<UserQuestionHistory>
+  ): Promise<void> {
+    const [existing] = await db.select()
+      .from(userQuestionHistory)
+      .where(and(
+        eq(userQuestionHistory.userId, userId),
+        eq(userQuestionHistory.questionId, questionId)
+      ));
+
+    const now = new Date();
+
+    if (existing) {
+      await db.update(userQuestionHistory)
+        .set({
+          ...data,
+          updatedAt: now,
+        })
+        .where(eq(userQuestionHistory.id, existing.id));
+    } else {
+      await db.insert(userQuestionHistory).values({
+        userId,
+        questionId,
+        lastSeen: data.lastSeen || now,
+        nextReview: data.nextReview || now,
+        intervalDays: data.intervalDays || 1,
+        easeFactor: data.easeFactor || 2.5,
+        repetitions: data.repetitions || 0,
+        lastResult: data.lastResult,
+        streak: data.streak || 0,
+      });
+    }
+  }
+
+  async getQuestionsForAdaptivePractice(
+    userId: string,
+    testType: string,
+    limit: number
+  ): Promise<Question[]> {
+    const { getPrioritizedQuestions } = await import('./adaptiveLearning');
+    return getPrioritizedQuestions(userId, testType, limit);
   }
 }
 

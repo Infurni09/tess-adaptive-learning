@@ -101,23 +101,52 @@ export const topicPerformance = pgTable("topic_performance", {
   averageScore: integer("average_score").default(0).notNull(),
   lastPracticed: timestamp("last_practiced"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  confidenceScore: real("confidence_score").default(0.5), // 0-1 scale for ML confidence
-  lastDifficultyLevel: integer("last_difficulty_level").default(5), // Track progression
+  confidenceScore: real("confidence_score").notNull().default(50), // 0-100 scale for ML confidence
+  lastConfidenceUpdate: timestamp("last_confidence_update").defaultNow(),
+  lastDifficultyLevel: integer("last_difficulty_level").notNull().default(5), // Track progression
 });
 
+// Question Difficulty History - tracks historical difficulty metrics over time windows
+export const questionDifficultyHistory = pgTable(
+  "question_difficulty_history",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    questionId: varchar("question_id").notNull().references(() => questions.id, { onDelete: "cascade" }),
+    windowStart: timestamp("window_start").notNull(),
+    windowEnd: timestamp("window_end").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    correct: integer("correct").notNull().default(0),
+    computedDifficulty: integer("computed_difficulty").notNull().default(5), // 1-10 scale
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_difficulty_question").on(table.questionId),
+    index("idx_difficulty_window").on(table.windowStart, table.windowEnd),
+  ],
+);
+
 // User Question History - for spaced repetition (SM-2 algorithm)
-export const userQuestionHistory = pgTable("user_question_history", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  questionId: varchar("question_id").notNull().references(() => questions.id, { onDelete: "cascade" }),
-  lastSeen: timestamp("last_seen").notNull(),
-  interval: integer("interval").default(1), // Days until next review
-  easeFactor: real("ease_factor").default(2.5), // SM-2 algorithm ease factor
-  repetitions: integer("repetitions").default(0), // Number of successful repetitions
-  nextReview: timestamp("next_review").notNull(), // When this question should be reviewed again
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+export const userQuestionHistory = pgTable(
+  "user_question_history",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    questionId: varchar("question_id").notNull().references(() => questions.id, { onDelete: "cascade" }),
+    lastSeen: timestamp("last_seen").notNull().defaultNow(),
+    nextReview: timestamp("next_review").notNull(),
+    intervalDays: integer("interval_days").notNull().default(1),
+    easeFactor: real("ease_factor").notNull().default(2.5),
+    repetitions: integer("repetitions").notNull().default(0),
+    lastResult: boolean("last_result"),
+    streak: integer("streak").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_user_question_history_user").on(table.userId),
+    index("idx_user_question_history_next_review").on(table.nextReview),
+  ],
+);
 
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -154,6 +183,23 @@ export const insertPracticeResponseSchema = createInsertSchema(practiceResponses
   createdAt: true,
 });
 
+export const insertQuestionDifficultyHistorySchema = createInsertSchema(questionDifficultyHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserQuestionHistorySchema = createInsertSchema(userQuestionHistory).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTopicPerformanceSchema = createInsertSchema(topicPerformance).omit({
+  id: true,
+  updatedAt: true,
+  lastConfidenceUpdate: true,
+});
+
 // Export types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
@@ -174,4 +220,11 @@ export type PracticeSession = typeof practiceSessions.$inferSelect;
 export type InsertPracticeResponse = z.infer<typeof insertPracticeResponseSchema>;
 export type PracticeResponse = typeof practiceResponses.$inferSelect;
 
+export type InsertTopicPerformance = z.infer<typeof insertTopicPerformanceSchema>;
 export type TopicPerformance = typeof topicPerformance.$inferSelect;
+
+export type InsertQuestionDifficultyHistory = z.infer<typeof insertQuestionDifficultyHistorySchema>;
+export type QuestionDifficultyHistory = typeof questionDifficultyHistory.$inferSelect;
+
+export type InsertUserQuestionHistory = z.infer<typeof insertUserQuestionHistorySchema>;
+export type UserQuestionHistory = typeof userQuestionHistory.$inferSelect;
