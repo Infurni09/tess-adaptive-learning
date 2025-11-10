@@ -22,28 +22,55 @@ export default function Practice() {
   const urlParams = new URLSearchParams(window.location.search);
   const urlSessionId = urlParams.get("sessionId");
 
-  const { data: sessionData, isLoading: sessionLoading } = useQuery({
+  const { data: sessionData, isLoading: sessionLoading, isError: sessionError, error: sessionFetchError } = useQuery({
     queryKey: ['/api/practice-sessions', urlSessionId],
     enabled: !!urlSessionId,
     queryFn: async () => {
+      console.log(`[Practice] Fetching session for sessionId: ${urlSessionId}`);
       const res = await fetch(`/api/practice-sessions/${urlSessionId}`, {
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to fetch session");
-      return res.json();
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error(`[Practice] Failed to fetch session. Status: ${res.status}, Error: ${errorText}`);
+        throw new Error(`Failed to fetch session: ${res.status} ${errorText}`);
+      }
+      
+      const data = await res.json();
+      console.log(`[Practice] Successfully fetched session with ${data.questions?.length || 0} questions`);
+      return data;
     },
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   const createSessionMutation = useMutation({
     mutationFn: async (selectedTestType: string) => {
+      console.log(`[Practice] Creating session for testType: ${selectedTestType}`);
       const res = await fetch("/api/practice-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ testType: selectedTestType }),
       });
-      if (!res.ok) throw new Error("Failed to create session");
-      return res.json();
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error(`[Practice] Failed to create session. Status: ${res.status}, Error: ${errorText}`);
+        throw new Error(`Failed to create session: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      console.log(`[Practice] Successfully created session with ${data.questions?.length || 0} questions`);
+      return data;
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: "Failed to create practice session. Please check your authentication and try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -189,7 +216,47 @@ export default function Practice() {
   if (createSessionMutation.isPending || sessionLoading || !sessionId) {
     return (
       <div className="min-h-screen p-8">
-        <Skeleton className="h-64 w-full max-w-4xl mx-auto" />
+        <div className="max-w-4xl mx-auto">
+          <Card className="p-8">
+            <Skeleton className="h-64 w-full" />
+            <p className="text-center text-sm text-muted-foreground mt-4">Loading your practice session...</p>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (sessionError || createSessionMutation.isError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8">
+        <Card className="p-8 text-center max-w-md">
+          <div className="text-destructive mb-4">
+            <svg className="h-12 w-12 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Failed to Load Practice Session</h2>
+          <p className="text-muted-foreground mb-4">
+            {sessionFetchError?.message || createSessionMutation.error?.message || "Unable to load practice session. Please check your authentication and try again."}
+          </p>
+          <div className="space-y-2">
+            <Button 
+              onClick={() => window.location.reload()} 
+              data-testid="button-retry"
+              className="w-full"
+            >
+              Retry
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => setLocation("/dashboard")} 
+              data-testid="button-back-to-dashboard"
+              className="w-full"
+            >
+              Return to Dashboard
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -199,6 +266,9 @@ export default function Practice() {
       <div className="min-h-screen flex items-center justify-center p-8">
         <Card className="p-8 text-center">
           <p className="text-lg font-medium mb-4">No questions available</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            We couldn't find any questions for this practice session. Please try again or contact support.
+          </p>
           <Button onClick={() => setLocation("/dashboard")} data-testid="button-back-to-dashboard">
             Return to Dashboard
           </Button>

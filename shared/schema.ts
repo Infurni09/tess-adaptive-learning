@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, index, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -44,7 +44,9 @@ export const questions = pgTable("questions", {
   subtopic: text("subtopic"), // CRITICAL: More granular categorization - MUST be event-specific AND subject-specific
   subject: text("subject").notNull(), // Marketing, Finance, etc.
   testType: text("test_type").notNull().default("DECA"), // DECA or FBLA - events are separate
-  difficulty: integer("difficulty").default(1), // 1-3 for easy/medium/hard
+  difficulty: integer("difficulty").default(5), // 1-10 scale, calculated from historical accuracy
+  timesAnswered: integer("times_answered").default(0), // Track how many times this question has been answered
+  timesCorrect: integer("times_correct").default(0), // Track how many times answered correctly
 });
 
 export const diagnosticTests = pgTable("diagnostic_tests", {
@@ -98,6 +100,22 @@ export const topicPerformance = pgTable("topic_performance", {
   totalCorrect: integer("total_correct").default(0).notNull(),
   averageScore: integer("average_score").default(0).notNull(),
   lastPracticed: timestamp("last_practiced"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  confidenceScore: real("confidence_score").default(0.5), // 0-1 scale for ML confidence
+  lastDifficultyLevel: integer("last_difficulty_level").default(5), // Track progression
+});
+
+// User Question History - for spaced repetition (SM-2 algorithm)
+export const userQuestionHistory = pgTable("user_question_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  questionId: varchar("question_id").notNull().references(() => questions.id, { onDelete: "cascade" }),
+  lastSeen: timestamp("last_seen").notNull(),
+  interval: integer("interval").default(1), // Days until next review
+  easeFactor: real("ease_factor").default(2.5), // SM-2 algorithm ease factor
+  repetitions: integer("repetitions").default(0), // Number of successful repetitions
+  nextReview: timestamp("next_review").notNull(), // When this question should be reviewed again
+  createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
