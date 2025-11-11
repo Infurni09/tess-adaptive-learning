@@ -352,6 +352,181 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ADMIN: One-time database seeding endpoint for production deployment
+  // Security: Requires authentication + environment variable authorization + empty database check
+  app.post("/api/admin/seed-database", isAuthenticated, async (req, res) => {
+    try {
+      console.log("[ADMIN SEED] Database seeding request received");
+      
+      // Admin authorization check: require ADMIN_SEED_SECRET environment variable
+      const adminSecret = process.env.ADMIN_SEED_SECRET;
+      const providedSecret = req.headers['x-admin-secret'] as string;
+      
+      if (!adminSecret || !providedSecret || adminSecret !== providedSecret) {
+        console.log("[ADMIN SEED] Unauthorized: missing or invalid admin secret");
+        return res.status(403).json({ 
+          error: "Forbidden: Admin authorization required. Set ADMIN_SEED_SECRET env var and provide X-Admin-Secret header." 
+        });
+      }
+      
+      // Safety check: only allow seeding if database is empty
+      const existingCount = await storage.getQuestionCount();
+      if (existingCount > 0) {
+        console.log(`[ADMIN SEED] Database already has ${existingCount} questions - seeding not allowed`);
+        return res.status(400).json({ 
+          error: "Database already contains questions. Seeding is only allowed on empty databases.", 
+          currentCount: existingCount 
+        });
+      }
+
+      console.log("[ADMIN SEED] Database is empty - starting import...");
+      
+      // Import questions from JSON files using same logic as import-questions.ts
+      const fs = await import("fs");
+      const path = await import("path");
+      
+      interface RawQuestion {
+        Question: string;
+        A: string;
+        B: string;
+        C: string;
+        D: string;
+        answer: string;
+        topic: string;
+      }
+
+      const cleanOption = (text: string): string => text.replace(/^[A-D]:\s*/, "").trim();
+      const extractCorrectAnswer = (answerText: string): number => {
+        const match = answerText.match(/^([A-D]):/);
+        return match ? match[1].charCodeAt(0) - 65 : 0;
+      };
+      const cleanQuestionText = (text: string): string => text.replace(/\s+/g, " ").trim();
+
+      const generateSubtopic = (question: string, topic: string, subject: string, testType: string): string => {
+        const lowerQuestion = question.toLowerCase();
+        const lowerTopic = topic.toLowerCase();
+        const context = `${lowerQuestion} ${lowerTopic}`;
+        
+        const patterns: Record<string, string[]> = {
+          analysis: ["ratio", "analysis", "analyze", "interpret", "evaluate"],
+          planning: ["budget", "forecast", "plan", "project"],
+          markets: ["stock", "bond", "equity", "debt", "market"],
+          credit: ["credit", "loan", "lending", "borrow"],
+          risk: ["risk", "insurance", "protect"],
+          strategy: ["strategy", "objective", "goal", "positioning"],
+          product: ["product", "brand", "feature", "quality"],
+          pricing: ["price", "pricing", "cost", "value"],
+          promotion: ["promotion", "advertising", "publicity"],
+          customer: ["customer", "consumer", "buyer", "satisfaction"],
+          management: ["management", "manager", "supervise", "organize"],
+          leadership: ["leadership", "leader", "motivate", "inspire"],
+          hr: ["human resource", "employee", "recruit", "hire"],
+          law: ["law", "legal", "regulation", "compliance"],
+          ethics: ["ethics", "ethical", "responsibility"],
+          technology: ["technology", "software", "system", "data"],
+        };
+        
+        for (const [category, keywords] of Object.entries(patterns)) {
+          if (keywords.some(kw => context.includes(kw))) {
+            const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+            return `${testType}-${subject}-${categoryName}`;
+          }
+        }
+        
+        return `${testType}-${subject}-${topic}`;
+      };
+
+      const questionFiles = [
+        { file: "attached_assets/Finance DECA_1762624175016.json", subject: "Finance" },
+        { file: "attached_assets/Marketing DECA_1762624175016.json", subject: "Marketing" },
+        { file: "attached_assets/Business Administration Core DECA_1762624175016.json", subject: "Business Administration" },
+        { file: "attached_assets/Business Management and Adminstration DECA_1762624175016.json", subject: "Business Management" },
+        { file: "attached_assets/Entrepreneurship DECA_1762624175016.json", subject: "Entrepreneurship" },
+        { file: "attached_assets/Hospitality and Tourism DECA_1762624175016.json", subject: "Hospitality & Tourism" },
+      ];
+
+      let totalImported = 0;
+      const importResults = [];
+
+      for (const { file, subject } of questionFiles) {
+        if (!fs.existsSync(file)) {
+          console.log(`[ADMIN SEED] File not found: ${file}`);
+          importResults.push({ subject, status: "File not found", imported: 0 });
+          continue;
+        }
+
+        console.log(`[ADMIN SEED] Importing ${subject}...`);
+        const fileName = path.basename(file);
+        const testType = fileName.toUpperCase().includes("FBLA") ? "FBLA" : "DECA";
+        
+        const fileContent = fs.readFileSync(file, "utf-8");
+        const rawQuestions: RawQuestion[] = JSON.parse(fileContent);
+        
+        const questionsToInsert = [];
+        let skipped = 0;
+
+        for (const raw of rawQuestions) {
+          if (!raw.Question || !raw.A || !raw.B || !raw.C || !raw.D || !raw.answer) {
+            skipped++;
+            continue;
+          }
+
+          const question = cleanQuestionText(raw.Question);
+          const optionA = cleanOption(raw.A);
+          const optionB = cleanOption(raw.B);
+          const optionC = cleanOption(raw.C);
+          const optionD = cleanOption(raw.D);
+
+          if (optionA.length > 500 || optionB.length > 500 || optionC.length > 500 || optionD.length > 500) {
+            skipped++;
+            continue;
+          }
+          if (question.length < 10 || question.length > 1000) {
+            skipped++;
+            continue;
+          }
+
+          const correctAnswer = extractCorrectAnswer(raw.answer);
+          const topic = raw.topic || "General";
+          const subtopic = generateSubtopic(question, topic, subject, testType);
+
+          questionsToInsert.push({
+            question,
+            optionA,
+            optionB,
+            optionC,
+            optionD,
+            correctAnswer,
+            topic,
+            subtopic,
+            subject,
+            testType,
+            difficulty: 1,
+          });
+        }
+
+        if (questionsToInsert.length > 0) {
+          await storage.bulkInsertQuestions(questionsToInsert);
+          totalImported += questionsToInsert.length;
+          console.log(`[ADMIN SEED] ✓ Imported ${questionsToInsert.length} ${subject} questions`);
+          importResults.push({ subject, status: "Success", imported: questionsToInsert.length, skipped });
+        }
+      }
+
+      console.log(`[ADMIN SEED] ✓ Complete! Imported ${totalImported} questions total`);
+      
+      res.json({ 
+        success: true, 
+        totalImported,
+        results: importResults,
+        message: `Successfully imported ${totalImported} DECA questions into production database` 
+      });
+    } catch (error: any) {
+      console.error("[ADMIN SEED] Error seeding database:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/practice-sessions/:id/submit", isAuthenticated, async (req, res) => {
     try {
       const { answers, responseTimes } = req.body; // answers: { questionId: selectedAnswer }, responseTimes: { questionId: timeMs }

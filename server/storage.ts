@@ -83,6 +83,22 @@ export interface IStorage {
   
   // Get all unique subjects for a given event type with question counts
   getAvailableSubjects(testType: string): Promise<Array<{ subject: string; count: number }>>;
+  
+  // Admin operations for database seeding
+  getQuestionCount(): Promise<number>;
+  bulkInsertQuestions(questions: Array<{
+    question: string;
+    optionA: string;
+    optionB: string;
+    optionC: string;
+    optionD: string;
+    correctAnswer: number;
+    topic: string;
+    subtopic: string;
+    subject: string;
+    testType: string;
+    difficulty: number;
+  }>): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -561,6 +577,31 @@ export class DatabaseStorage implements IStorage {
       subject: r.subject!,
       count: r.count,
     }));
+  }
+
+  // Admin operations for database seeding
+  async getQuestionCount(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(questions);
+    return result[0]?.count || 0;
+  }
+
+  async bulkInsertQuestions(questionsData: Array<{
+    question: string;
+    optionA: string;
+    optionB: string;
+    optionC: string;
+    optionD: string;
+    correctAnswer: number;
+    topic: string;
+    subtopic: string;
+    subject: string;
+    testType: string;
+    difficulty: number;
+  }>): Promise<void> {
+    if (questionsData.length === 0) return;
+    await db.insert(questions).values(questionsData);
   }
 }
 
