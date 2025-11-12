@@ -162,7 +162,7 @@ export class DatabaseStorage implements IStorage {
     
     query = query.where(and(...conditions)) as any;
     
-    return query.orderBy(sql`RANDOM()`).limit(limit);
+    return query.orderBy(questions.id).limit(limit);
   }
 
   async getQuestionById(id: string): Promise<Question | undefined> {
