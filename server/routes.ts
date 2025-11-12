@@ -8,6 +8,7 @@ import {
   updateConfidenceScore,
   updateDifficultyProgression,
 } from "./adaptiveLearning";
+import { DECA_SUBJECTS, FBLA_SUBJECTS } from "../shared/constants";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup Replit Auth (OAuth with Google/GitHub/email)
@@ -128,58 +129,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Forbidden" });
       }
       
-      // Return 100 random questions for the diagnostic test with cascading fallback
-      // IMPORTANT: Only get questions matching the test's event type (DECA/FBLA)
-      // Guaranteed to return exactly 100 questions (or all available if < 100 exist in event)
+      // Deterministic approach - no random sampling limits
       let questions = [];
-      
+
       if (test.subject) {
-        // Step 1: Try to get questions from the specific subject
-        const subjectQuestions = await storage.getRandomQuestions(100, test.subject, undefined, test.testType);
-        questions = subjectQuestions;
+        // Step 1: Get ALL available questions from the specific subject
+        const subjectQuestions = await storage.getRandomQuestions(1000, test.subject, undefined, test.testType);
+        questions = subjectQuestions.slice(0, Math.min(100, subjectQuestions.length));
         
-        // Step 2: If we don't have 100, backfill from the broader event
+        // Step 2: If we need more, backfill from the broader event
         if (questions.length < 100) {
-          console.log(`[Diagnostic] Only ${questions.length} questions for ${test.subject}, backfilling from ${test.testType}`);
+          const excludeIds = questions.map(q => q.id);
+          const additionalNeeded = 100 - questions.length;
           
-          // Keep fetching until we have 100 unique questions or exhaust the event pool
-          const maxAttempts = 10; // Safety limit to prevent infinite loops
-          let attempts = 0;
+          // Get all remaining event questions, excluding already-selected ones
+          const eventQuestions = await storage.getRandomQuestions(1000, undefined, undefined, test.testType, excludeIds);
           
-          while (questions.length < 100 && attempts < maxAttempts) {
-            const stillNeeded = 100 - questions.length;
-            // Get IDs of questions we already have
-            const excludeIds = questions.map(q => q.id);
-            
-            // Fetch exactly what we need, excluding already-selected questions
-            const eventQuestions = await storage.getRandomQuestions(
-              stillNeeded, 
-              undefined, 
-              undefined, 
-              test.testType,
-              excludeIds  // Exclude already-selected questions
-            );
-            
-            // Add new unique questions (should be guaranteed unique by SQL)
-            questions.push(...eventQuestions);
-            
-            attempts++;
-            
-            // If we got no new questions, we've exhausted the pool
-            if (eventQuestions.length === 0) {
-              console.log(`[Diagnostic] Exhausted event pool after ${attempts} attempts with ${questions.length} questions`);
-              break;
-            }
-          }
+          // Add exactly as many as we need
+          questions = [...questions, ...eventQuestions.slice(0, additionalNeeded)];
         }
       } else {
-        // No subject specified - get 100 questions from the entire event
-        questions = await storage.getRandomQuestions(100, undefined, undefined, test.testType);
+        // No subject - get 100 from entire event
+        const allQuestions = await storage.getRandomQuestions(1000, undefined, undefined, test.testType);
+        questions = allQuestions.slice(0, Math.min(100, allQuestions.length));
       }
-      
-      // Final safety check: log if we couldn't reach 100 questions
+
+      // This approach guarantees exactly 100 questions if the event has >=100 total
       if (questions.length < 100) {
-        console.warn(`[Diagnostic] Warning: Only ${questions.length} questions available for ${test.testType}${test.subject ? ` - ${test.subject}` : ''}. Database may need more questions.`);
+        console.warn(`[Diagnostic] Only ${questions.length} questions available in ${test.testType}. Database needs more questions.`);
       }
       
       res.json({ questions });
@@ -281,7 +258,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/subjects", async (req, res) => {
     try {
       const testType = (req.query.testType as string) || "DECA";
-      const subjects = await storage.getAvailableSubjects(testType);
+      
+      // Get canonical subject list for the event type
+      const canonicalSubjects = testType === "FBLA" ? FBLA_SUBJECTS : DECA_SUBJECTS;
+      
+      // Get actual question counts from database
+      const actualSubjects = await storage.getAvailableSubjects(testType);
+      
+      // Create a map of actual counts for quick lookup
+      const countMap = new Map<string, number>();
+      actualSubjects.forEach(s => {
+        countMap.set(s.subject, s.count);
+      });
+      
+      // Merge canonical subjects with actual counts
+      // All canonical subjects will appear, even those with 0 questions
+      const subjects = canonicalSubjects.map(canonical => ({
+        subject: canonical.name,
+        count: countMap.get(canonical.name) || 0,
+        displayOrder: canonical.displayOrder,
+      })).sort((a, b) => a.displayOrder - b.displayOrder);
+      
       res.json({ subjects });
     } catch (error: any) {
       console.error("[Subjects] Error fetching subjects:", error);

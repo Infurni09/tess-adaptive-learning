@@ -271,22 +271,37 @@ export default function DiagnosticTest() {
               </p>
             </Card>
 
-            {availableSubjects.map((subj) => (
-              <Card
-                key={subj.subject}
-                className="p-6 cursor-pointer hover-elevate active-elevate-2 transition-all duration-200 border-2"
-                onClick={() => {
-                  setSubject(subj.subject);
-                  createTestMutation.mutate({ testType, subject: subj.subject });
-                }}
-                data-testid={`button-select-${subj.subject.toLowerCase().replace(/\s+/g, '-')}`}
-              >
-                <h3 className="text-lg font-bold mb-2">{subj.subject}</h3>
-                <Badge variant="secondary" className="text-xs">
-                  {subj.count} questions
-                </Badge>
-              </Card>
-            ))}
+            {availableSubjects.map((subj) => {
+              const hasQuestions = subj.count > 0;
+              return (
+                <Card
+                  key={subj.subject}
+                  className={`p-6 transition-all duration-200 border-2 ${
+                    hasQuestions
+                      ? "cursor-pointer hover-elevate active-elevate-2"
+                      : "opacity-50 cursor-not-allowed"
+                  }`}
+                  onClick={() => {
+                    if (hasQuestions) {
+                      setSubject(subj.subject);
+                      createTestMutation.mutate({ testType, subject: subj.subject });
+                    }
+                  }}
+                  data-testid={`button-select-${subj.subject.toLowerCase().replace(/\s+/g, '-')}`}
+                >
+                  <h3 className={`text-lg font-bold mb-2 ${!hasQuestions && "text-muted-foreground"}`}>
+                    {subj.subject}
+                  </h3>
+                  <Badge 
+                    variant={hasQuestions ? "secondary" : "outline"} 
+                    className="text-xs"
+                  >
+                    {subj.count} question{subj.count !== 1 ? 's' : ''}
+                    {!hasQuestions && " - Coming Soon"}
+                  </Badge>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </div>
