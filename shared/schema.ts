@@ -54,6 +54,7 @@ export const diagnosticTests = pgTable("diagnostic_tests", {
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   testNumber: integer("test_number").notNull(), // 1, 2, or 3
   testType: text("test_type").notNull().default("DECA"), // DECA or FBLA - events are separate, cannot mix
+  subject: text("subject"), // Optional: specific subject within the event (Finance, Marketing, etc.)
   status: text("status").notNull().default("not_started"), // not_started, in_progress, completed
   score: integer("score"),
   totalQuestions: integer("total_questions").default(100),

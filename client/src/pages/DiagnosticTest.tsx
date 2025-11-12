@@ -15,16 +15,19 @@ export default function DiagnosticTest() {
   const [selectedAnswers, setSelectedAnswers] = useState<{[key: string]: number}>({});
   const [testId, setTestId] = useState<string | null>(null);
   const [testType, setTestType] = useState<string | null>(null); // DECA or FBLA - NEVER mix
+  const [subject, setSubject] = useState<string | null>(null); // Subject within the event
   const [timeRemaining, setTimeRemaining] = useState(9000); // 150 minutes for 100 questions
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const createTestMutation = useMutation({
-    mutationFn: async (selectedTestType: string) => {
+    mutationFn: async ({ testType: selectedTestType, subject: selectedSubject }: { testType: string; subject?: string }) => {
       // IMPORTANT: testType separates DECA and FBLA - they NEVER mix
+      // subject (optional) filters to specific subject within the event
       const res = await apiRequest("POST", "/api/diagnostic-tests", { 
         testNumber: 1,
-        testType: selectedTestType 
+        testType: selectedTestType,
+        subject: selectedSubject 
       });
       return await res.json();
     },
@@ -152,17 +155,14 @@ export default function DiagnosticTest() {
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold mb-4" data-testid="text-select-event">Select Your Event</h1>
             <p className="text-muted-foreground text-lg">
-              Choose which competition you're preparing for. Questions are separated by event.
+              Choose which competition you're preparing for.
             </p>
           </div>
           
           <div className="grid gap-6 md:grid-cols-2">
             <Card 
               className="p-8 cursor-pointer hover-elevate active-elevate-2 transition-all duration-200 border-2"
-              onClick={() => {
-                setTestType("DECA");
-                createTestMutation.mutate("DECA");
-              }}
+              onClick={() => setTestType("DECA")}
               data-testid="button-select-deca"
             >
               <h2 className="text-3xl font-bold text-primary mb-4">DECA</h2>
@@ -180,10 +180,7 @@ export default function DiagnosticTest() {
             
             <Card 
               className="p-8 cursor-pointer hover-elevate active-elevate-2 transition-all duration-200 border-2"
-              onClick={() => {
-                setTestType("FBLA");
-                createTestMutation.mutate("FBLA");
-              }}
+              onClick={() => setTestType("FBLA")}
               data-testid="button-select-fbla"
             >
               <h2 className="text-3xl font-bold text-primary mb-4">FBLA</h2>
@@ -199,10 +196,98 @@ export default function DiagnosticTest() {
               </ul>
             </Card>
           </div>
-          
-          <p className="text-center text-sm text-muted-foreground mt-8">
-            Note: DECA and FBLA questions are completely separate and do not overlap.
-          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Fetch available subjects for the selected event type
+  const { data: subjectsData, isLoading: subjectsLoading } = useQuery<{ subjects: Array<{ subject: string; count: number }> }>({
+    queryKey: ['/api/subjects', testType],
+    queryFn: async () => {
+      const res = await fetch(`/api/subjects?testType=${testType}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error('Failed to fetch subjects');
+      return res.json();
+    },
+    enabled: !!testType && !testId,
+  });
+
+  // Subject selection screen - appears after event selection
+  if (testType && !subject && !testId) {
+    const availableSubjects = subjectsData?.subjects || [];
+
+    if (subjectsLoading) {
+      return (
+        <div className="min-h-screen p-8">
+          <div className="max-w-4xl mx-auto">
+            <Card className="p-8">
+              <Skeleton className="h-8 w-64 mb-4" />
+              <Skeleton className="h-4 w-full mb-2" />
+              <Skeleton className="h-64 w-full" />
+              <p className="text-center text-sm text-muted-foreground mt-4">Loading subjects...</p>
+            </Card>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen p-8 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800">
+        <div className="max-w-4xl mx-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setTestType(null)}
+            className="mb-6"
+            data-testid="button-back-to-event"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Event Selection
+          </Button>
+
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold mb-4" data-testid="text-select-subject">
+              Select {testType} Subject
+            </h1>
+            <p className="text-muted-foreground text-lg">
+              Choose a specific subject for your diagnostic test, or select "All Subjects" for a comprehensive test.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <Card
+              className="p-6 cursor-pointer hover-elevate active-elevate-2 transition-all duration-200 border-2 border-primary"
+              onClick={() => {
+                setSubject("all");
+                createTestMutation.mutate({ testType, subject: undefined });
+              }}
+              data-testid="button-select-all-subjects"
+            >
+              <h3 className="text-xl font-bold text-primary mb-2">All Subjects</h3>
+              <p className="text-sm text-muted-foreground">
+                Comprehensive test covering all {testType} subjects
+              </p>
+            </Card>
+
+            {availableSubjects.map((subj) => (
+              <Card
+                key={subj.subject}
+                className="p-6 cursor-pointer hover-elevate active-elevate-2 transition-all duration-200 border-2"
+                onClick={() => {
+                  setSubject(subj.subject);
+                  createTestMutation.mutate({ testType, subject: subj.subject });
+                }}
+                data-testid={`button-select-${subj.subject.toLowerCase().replace(/\s+/g, '-')}`}
+              >
+                <h3 className="text-lg font-bold mb-2">{subj.subject}</h3>
+                <Badge variant="secondary" className="text-xs">
+                  {subj.count} questions
+                </Badge>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -298,9 +383,11 @@ export default function DiagnosticTest() {
             <Clipboard className="h-8 w-8 text-primary" />
             <div>
               <h1 className="text-3xl font-bold tracking-tight" data-testid="text-test-title">
-                {testType} Diagnostic Test
+                {testType} {subject && subject !== "all" ? `${subject} ` : ""}Diagnostic Test
               </h1>
-              <p className="text-sm text-muted-foreground">100 Questions - Comprehensive Assessment</p>
+              <p className="text-sm text-muted-foreground">
+                {subject && subject !== "all" ? `Subject-Specific Assessment` : "100 Questions - Comprehensive Assessment"}
+              </p>
             </div>
           </div>
           <Badge className="text-lg px-4 py-2" variant="outline" data-testid="text-timer">

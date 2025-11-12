@@ -7,7 +7,7 @@ import {
   type TestResponse, type PracticeSession, type TopicPerformance,
   type QuestionDifficultyHistory, type UserQuestionHistory
 } from "@shared/schema";
-import { eq, and, desc, sql, inArray, or, gte } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, or, gte, not } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -19,13 +19,13 @@ export interface IStorage {
 
   // Question operations
   // IMPORTANT: testType parameter separates DECA and FBLA - they NEVER mix
-  getRandomQuestions(limit: number, subject?: string, topic?: string, testType?: string): Promise<Question[]>;
+  getRandomQuestions(limit: number, subject?: string, topic?: string, testType?: string, excludeIds?: string[]): Promise<Question[]>;
   getQuestionById(id: string): Promise<Question | undefined>;
   getQuestionsByTopic(topic: string, limit: number, testType?: string): Promise<Question[]>;
   
   // Diagnostic test operations
   // IMPORTANT: testType parameter separates DECA and FBLA - they NEVER mix
-  createDiagnosticTest(userId: string, testNumber: number, testType?: string): Promise<DiagnosticTest>;
+  createDiagnosticTest(userId: string, testNumber: number, testType?: string, subject?: string): Promise<DiagnosticTest>;
   getDiagnosticTest(testId: string): Promise<DiagnosticTest | undefined>;
   getUserDiagnosticTests(userId: string): Promise<DiagnosticTest[]>;
   updateDiagnosticTestStatus(testId: string, status: string, score?: number): Promise<void>;
@@ -141,7 +141,7 @@ export class DatabaseStorage implements IStorage {
 
   // Question operations
   // IMPORTANT: testType separates DECA and FBLA questions - they NEVER mix
-  async getRandomQuestions(limit: number, subject?: string, topic?: string, testType: string = "DECA"): Promise<Question[]> {
+  async getRandomQuestions(limit: number, subject?: string, topic?: string, testType: string = "DECA", excludeIds?: string[]): Promise<Question[]> {
     let query = db.select().from(questions);
     
     const conditions = [eq(questions.testType, testType)];
@@ -153,6 +153,11 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(questions.subject, subject));
     } else if (topic) {
       conditions.push(eq(questions.topic, topic));
+    }
+    
+    // Exclude already-selected question IDs to guarantee uniqueness
+    if (excludeIds && excludeIds.length > 0) {
+      conditions.push(not(inArray(questions.id, excludeIds)));
     }
     
     query = query.where(and(...conditions)) as any;
@@ -194,11 +199,12 @@ export class DatabaseStorage implements IStorage {
 
   // Diagnostic test operations
   // IMPORTANT: testType (DECA/FBLA) determines which questions are used - events NEVER mix
-  async createDiagnosticTest(userId: string, testNumber: number, testType: string = "DECA"): Promise<DiagnosticTest> {
+  async createDiagnosticTest(userId: string, testNumber: number, testType: string = "DECA", subject?: string): Promise<DiagnosticTest> {
     const [test] = await db.insert(diagnosticTests).values({
       userId,
       testNumber,
       testType,
+      subject: subject || null,
       status: "in_progress",
     }).returning();
     return test;

@@ -73,17 +73,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Diagnostic test routes
   app.post("/api/diagnostic-tests", isAuthenticated, async (req, res) => {
     try {
-      const { testNumber, testType } = req.body;
+      const { testNumber, testType, subject } = req.body;
       
       if (!testNumber || testNumber < 1 || testNumber > 3) {
         return res.status(400).json({ error: "Valid test number (1-3) required" });
       }
 
       // IMPORTANT: testType (DECA or FBLA) separates question sets - they NEVER mix
+      // subject (optional) filters to specific subject within the event
       const test = await storage.createDiagnosticTest(
         (req.user as any).claims.sub!, 
         testNumber,
-        testType || "DECA"
+        testType || "DECA",
+        subject
       );
       
       res.json({ test });
@@ -126,9 +128,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Forbidden" });
       }
       
-      // Return 100 random questions for the diagnostic test
+      // Return 100 random questions for the diagnostic test with cascading fallback
       // IMPORTANT: Only get questions matching the test's event type (DECA/FBLA)
-      const questions = await storage.getRandomQuestions(100, undefined, undefined, test.testType);
+      // Guaranteed to return exactly 100 questions (or all available if < 100 exist in event)
+      let questions = [];
+      
+      if (test.subject) {
+        // Step 1: Try to get questions from the specific subject
+        const subjectQuestions = await storage.getRandomQuestions(100, test.subject, undefined, test.testType);
+        questions = subjectQuestions;
+        
+        // Step 2: If we don't have 100, backfill from the broader event
+        if (questions.length < 100) {
+          console.log(`[Diagnostic] Only ${questions.length} questions for ${test.subject}, backfilling from ${test.testType}`);
+          
+          // Keep fetching until we have 100 unique questions or exhaust the event pool
+          const maxAttempts = 10; // Safety limit to prevent infinite loops
+          let attempts = 0;
+          
+          while (questions.length < 100 && attempts < maxAttempts) {
+            const stillNeeded = 100 - questions.length;
+            // Get IDs of questions we already have
+            const excludeIds = questions.map(q => q.id);
+            
+            // Fetch exactly what we need, excluding already-selected questions
+            const eventQuestions = await storage.getRandomQuestions(
+              stillNeeded, 
+              undefined, 
+              undefined, 
+              test.testType,
+              excludeIds  // Exclude already-selected questions
+            );
+            
+            // Add new unique questions (should be guaranteed unique by SQL)
+            questions.push(...eventQuestions);
+            
+            attempts++;
+            
+            // If we got no new questions, we've exhausted the pool
+            if (eventQuestions.length === 0) {
+              console.log(`[Diagnostic] Exhausted event pool after ${attempts} attempts with ${questions.length} questions`);
+              break;
+            }
+          }
+        }
+      } else {
+        // No subject specified - get 100 questions from the entire event
+        questions = await storage.getRandomQuestions(100, undefined, undefined, test.testType);
+      }
+      
+      // Final safety check: log if we couldn't reach 100 questions
+      if (questions.length < 100) {
+        console.warn(`[Diagnostic] Warning: Only ${questions.length} questions available for ${test.testType}${test.subject ? ` - ${test.subject}` : ''}. Database may need more questions.`);
+      }
+      
       res.json({ questions });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
