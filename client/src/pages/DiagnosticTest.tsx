@@ -147,6 +147,20 @@ export default function DiagnosticTest() {
     return `${hours}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Fetch available subjects for the selected event type
+  // IMPORTANT: This hook must be called unconditionally (before any early returns)
+  const { data: subjectsData, isLoading: subjectsLoading } = useQuery<{ subjects: Array<{ subject: string; count: number }> }>({
+    queryKey: ['/api/subjects', testType],
+    queryFn: async () => {
+      const res = await fetch(`/api/subjects?testType=${testType}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error('Failed to fetch subjects');
+      return res.json();
+    },
+    enabled: !!testType && !testId,
+  });
+
   // Event selection screen - IMPORTANT: DECA and FBLA NEVER mix
   if (!testType) {
     return (
@@ -200,19 +214,6 @@ export default function DiagnosticTest() {
       </div>
     );
   }
-
-  // Fetch available subjects for the selected event type
-  const { data: subjectsData, isLoading: subjectsLoading } = useQuery<{ subjects: Array<{ subject: string; count: number }> }>({
-    queryKey: ['/api/subjects', testType],
-    queryFn: async () => {
-      const res = await fetch(`/api/subjects?testType=${testType}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error('Failed to fetch subjects');
-      return res.json();
-    },
-    enabled: !!testType && !testId,
-  });
 
   // Subject selection screen - appears after event selection
   if (testType && !subject && !testId) {
