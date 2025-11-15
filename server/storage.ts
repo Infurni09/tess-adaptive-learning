@@ -43,7 +43,7 @@ export interface IStorage {
   
   // Topic performance operations
   getTopicPerformance(userId: string): Promise<TopicPerformance[]>;
-  updateTopicPerformance(userId: string, topic: string, isCorrect: boolean): Promise<void>;
+  updateTopicPerformance(userId: string, topic: string, subject: string, isCorrect: boolean): Promise<void>;
   
   // Analytics
   getUserStats(userId: string): Promise<{
@@ -280,7 +280,13 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(topicPerformance.averageScore));
   }
 
-  async updateTopicPerformance(userId: string, topic: string, isCorrect: boolean): Promise<void> {
+  async updateTopicPerformance(userId: string, topic: string, subject: string, isCorrect: boolean): Promise<void> {
+    // CRITICAL: Validate subject is not null/undefined to ensure accurate mastery calculations
+    if (!subject || subject.trim() === "") {
+      console.error(`[updateTopicPerformance] Invalid subject for topic "${topic}". Subject must be provided.`);
+      throw new Error("Subject is required for topic performance tracking");
+    }
+
     const [existing] = await db.select().from(topicPerformance)
       .where(and(
         eq(topicPerformance.userId, userId),
@@ -294,6 +300,7 @@ export class DatabaseStorage implements IStorage {
 
       await db.update(topicPerformance)
         .set({
+          subject, // Update subject field (guaranteed non-null)
           totalAttempted: newTotalAttempted,
           totalCorrect: newTotalCorrect,
           averageScore: newAverageScore,
@@ -308,6 +315,7 @@ export class DatabaseStorage implements IStorage {
       await db.insert(topicPerformance).values({
         userId,
         topic,
+        subject, // Save subject field (guaranteed non-null)
         totalAttempted: 1,
         totalCorrect: isCorrect ? 1 : 0,
         averageScore: isCorrect ? 100 : 0,

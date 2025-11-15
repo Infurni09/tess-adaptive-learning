@@ -245,7 +245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             // Update topic performance
             const performanceTopic = question.subtopic || question.topic;
-            await storage.updateTopicPerformance(userId, performanceTopic, isCorrect);
+            await storage.updateTopicPerformance(userId, performanceTopic, question.subject, isCorrect);
 
             // ML updates
             const questionDifficulty = question.difficulty ?? 5;
@@ -631,7 +631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update subtopic performance (event-specific and subject-specific)
         // Use subtopic if available (more granular), otherwise fall back to topic
         const performanceTopic = question.subtopic || question.topic;
-        await storage.updateTopicPerformance(userId, performanceTopic, isCorrect);
+        await storage.updateTopicPerformance(userId, performanceTopic, question.subject, isCorrect);
 
         // ML Algorithm Updates (Phase 3)
         // Note: Errors in ML algorithms should not break practice session submission
@@ -691,6 +691,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const performance = await storage.getTopicPerformance((req.user as any).claims.sub!);
       res.json({ performance });
     } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get subject-level mastery for adaptive practice
+  app.get("/api/analytics/subject-mastery", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).claims.sub!;
+      const testType = (req.query.testType as string) || "DECA";
+      
+      // Get all topic performance for user
+      const performance = await storage.getTopicPerformance(userId);
+      
+      // Get canonical subjects for the event type
+      const canonicalSubjects = testType === "FBLA" ? FBLA_SUBJECTS : DECA_SUBJECTS;
+      
+      // Calculate mastery for each subject
+      const subjectMastery = canonicalSubjects.map(({ name }) => {
+        // Filter topics that belong to this subject using the subject field
+        const subjectTopics = performance.filter(p => p.subject === name);
+        
+        if (subjectTopics.length === 0) {
+          return { subject: name, mastery: 0, hasData: false, totalAttempts: 0 };
+        }
+        
+        // Calculate weighted average
+        let totalCorrect = 0;
+        let totalAttempts = 0;
+        
+        for (const topic of subjectTopics) {
+          totalCorrect += topic.totalCorrect;
+          totalAttempts += topic.totalAttempted;
+        }
+        
+        const mastery = totalAttempts > 0 
+          ? Math.round((totalCorrect / totalAttempts) * 100)
+          : 0;
+        
+        return { subject: name, mastery, hasData: true, totalAttempts };
+      });
+      
+      res.json({ subjectMastery });
+    } catch (error: any) {
+      console.error("[Subject Mastery] Error:", error);
       res.status(500).json({ error: error.message });
     }
   });

@@ -97,6 +97,7 @@ export const topicPerformance = pgTable("topic_performance", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   topic: text("topic").notNull(),
+  subject: text("subject"), // Subject for easier filtering (Finance, Marketing, etc.)
   totalAttempted: integer("total_attempted").default(0).notNull(),
   totalCorrect: integer("total_correct").default(0).notNull(),
   averageScore: integer("average_score").default(0).notNull(),
