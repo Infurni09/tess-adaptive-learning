@@ -186,69 +186,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const userId = (req.user as any).claims.sub!;
+      const questionIds = Object.keys(answers);
+
+      // Fetch all questions at once (batch query)
+      const questionsPromises = questionIds.map(qId => storage.getQuestionById(qId));
+      const questionsResults = await Promise.all(questionsPromises);
+      const questions = questionsResults.filter(q => q !== null);
+
+      // Calculate score quickly (just count correct answers)
       let correctCount = 0;
       const results = [];
 
-      for (const [questionId, selectedAnswer] of Object.entries(answers)) {
-        const question = await storage.getQuestionById(questionId);
+      for (const question of questions) {
         if (!question) continue;
 
         // DEFENSIVE: Validate question belongs to same event type (DECA/FBLA)
         if (question.testType !== test.testType) {
-          console.error(`Question ${questionId} testType ${question.testType} does not match test testType ${test.testType}`);
+          console.error(`Question ${question.id} testType ${question.testType} does not match test testType ${test.testType}`);
           continue;
         }
 
+        const selectedAnswer = answers[question.id];
         const isCorrect = question.correctAnswer === selectedAnswer;
         if (isCorrect) correctCount++;
 
-        await storage.saveTestResponse({
-          testId: test.id,
-          questionId,
-          selectedAnswer: selectedAnswer as number,
-          isCorrect,
-        });
-
-        // Update subtopic performance (event-specific and subject-specific)
-        // Use subtopic if available (more granular), otherwise fall back to topic
-        const performanceTopic = question.subtopic || question.topic;
-        await storage.updateTopicPerformance(userId, performanceTopic, isCorrect);
-
-        // ML Algorithm Updates (Phase 3)
-        // Note: Errors in ML algorithms should not break test submission
-        try {
-          console.log(`[ML] Processing question ${questionId} for diagnostic test`);
-          
-          // 1. Update question difficulty based on historical performance
-          await updateQuestionDifficulty(questionId);
-          
-          // 2. Update spaced repetition (responseTimeMs = 0 for diagnostic tests)
-          await updateSpacedRepetition(userId, questionId, isCorrect, 0);
-          
-          // 3. Update confidence score for the subtopic
-          const questionDifficulty = question.difficulty ?? 5;
-          await updateConfidenceScore(userId, performanceTopic, isCorrect, questionDifficulty);
-          
-          // 4. Update difficulty progression for the subtopic
-          await updateDifficultyProgression(userId, performanceTopic, isCorrect, questionDifficulty);
-          
-          console.log(`[ML] Successfully updated ML data for question ${questionId}`);
-        } catch (mlError: any) {
-          console.error(`[ML] Error updating ML algorithms for question ${questionId}:`, mlError);
-          // Continue with test submission even if ML update fails
-        }
-
         results.push({
-          questionId,
+          questionId: question.id,
           isCorrect,
           correctAnswer: question.correctAnswer,
         });
       }
 
-      const score = Math.round((correctCount / Object.keys(answers).length) * 100);
+      const score = Math.round((correctCount / questionIds.length) * 100);
       await storage.updateDiagnosticTestStatus(test.id, "completed", score);
 
+      // Send response immediately
       res.json({ score, results });
+
+      // Process ALL data persistence and ML updates in background
+      console.log(`[Background] Starting async processing for test ${test.id} (${questionIds.length} questions)`);
+      
+      (async () => {
+        try {
+          // Background processing: save responses, update performance, run ML
+          for (const question of questions) {
+            if (!question) continue;
+            
+            const selectedAnswer = answers[question.id];
+            const isCorrect = question.correctAnswer === selectedAnswer;
+            
+            // Save response
+            await storage.saveTestResponse({
+              testId: test.id,
+              questionId: question.id,
+              selectedAnswer: selectedAnswer as number,
+              isCorrect,
+            });
+
+            // Update topic performance
+            const performanceTopic = question.subtopic || question.topic;
+            await storage.updateTopicPerformance(userId, performanceTopic, isCorrect);
+
+            // ML updates
+            const questionDifficulty = question.difficulty ?? 5;
+            await Promise.all([
+              updateQuestionDifficulty(question.id),
+              updateSpacedRepetition(userId, question.id, isCorrect, 0),
+              updateConfidenceScore(userId, performanceTopic, isCorrect, questionDifficulty),
+              updateDifficultyProgression(userId, performanceTopic, isCorrect, questionDifficulty),
+            ]).catch(mlError => console.error(`[ML] Error for question ${question.id}:`, mlError));
+          }
+          
+          console.log(`[Background] Completed processing for test ${test.id}`);
+        } catch (bgError: any) {
+          console.error(`[Background] Error processing test ${test.id}:`, bgError);
+        }
+      })();
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
