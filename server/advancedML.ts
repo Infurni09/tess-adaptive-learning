@@ -883,7 +883,7 @@ export async function trainIRTParameters(testType: string, subject?: string): Pr
     }
 
     // Calculate and store IRT parameters
-    for (const [questionId, stats] of questionStats) {
+    for (const [questionId, stats] of Array.from(questionStats.entries())) {
       if (stats.total < 5) continue; // Need minimum responses
 
       const accuracy = stats.correct / stats.total;
@@ -1013,7 +1013,7 @@ export async function trainBKTParameters(testType: string): Promise<void> {
       let sumL0 = 0, sumT = 0, sumG = 0, sumS = 0;
       let countL0 = 0, countT = 0, countGS = 0;
 
-      for (const seq of sequences.values()) {
+      for (const seq of Array.from(sequences.values())) {
         if (seq.length < 2) continue;
 
         let pL = pL0;

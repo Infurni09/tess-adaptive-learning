@@ -8,6 +8,20 @@ import {
   updateConfidenceScore,
   updateDifficultyProgression,
 } from "./adaptiveLearning";
+import {
+  updateBKTKnowledgeState,
+  updateLearningCurve,
+  updateBanditState,
+  processResponseAdvanced,
+  runFullModelTraining,
+  trainIRTParameters,
+  trainBKTParameters,
+  estimateUserAbility,
+  getMasteredTopics,
+  updateEngagementMetrics,
+  getHighChurnRiskUsers,
+  selectAdvancedQuestion,
+} from "./advancedML";
 import { DECA_SUBJECTS, FBLA_SUBJECTS } from "../shared/constants";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -654,6 +668,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // 4. Update difficulty progression for the subtopic
           await updateDifficultyProgression(userId, performanceTopic, isCorrect, questionDifficulty);
           
+          // 5. Advanced ML: BKT, Learning Curves, Bandit
+          await processResponseAdvanced(
+            userId,
+            questionId,
+            performanceTopic,
+            question.subject,
+            isCorrect,
+            responseTimeMs
+          );
+          
           console.log(`[ML] Successfully updated ML data for question ${questionId}`);
         } catch (mlError: any) {
           console.error(`[ML] Error updating ML algorithms for question ${questionId}:`, mlError);
@@ -776,6 +800,218 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ questions });
     } catch (error: any) {
       console.error("[Adaptive Learning] Error getting recommendations:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============ ADVANCED ML ROUTES ============
+
+  // Train all ML models (admin endpoint)
+  app.post("/api/ml/train", isAuthenticated, async (req, res) => {
+    try {
+      const testType = (req.body.testType as string) || "DECA";
+      
+      console.log(`[ML Training] Starting full model training for ${testType}`);
+      
+      // Run training asynchronously
+      runFullModelTraining(testType).then(() => {
+        console.log(`[ML Training] Completed for ${testType}`);
+      }).catch((err) => {
+        console.error(`[ML Training] Error:`, err);
+      });
+      
+      res.json({ 
+        message: "Model training started",
+        testType,
+        status: "training"
+      });
+    } catch (error: any) {
+      console.error("[ML Training] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Train IRT parameters specifically
+  app.post("/api/ml/train/irt", isAuthenticated, async (req, res) => {
+    try {
+      const { testType = "DECA", subject } = req.body;
+      
+      console.log(`[IRT Training] Starting for ${testType}${subject ? '/' + subject : ''}`);
+      
+      await trainIRTParameters(testType, subject);
+      
+      res.json({ 
+        message: "IRT training completed",
+        testType,
+        subject,
+        status: "completed"
+      });
+    } catch (error: any) {
+      console.error("[IRT Training] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Train BKT parameters
+  app.post("/api/ml/train/bkt", isAuthenticated, async (req, res) => {
+    try {
+      const testType = (req.body.testType as string) || "DECA";
+      
+      console.log(`[BKT Training] Starting for ${testType}`);
+      
+      await trainBKTParameters(testType);
+      
+      res.json({ 
+        message: "BKT training completed",
+        testType,
+        status: "completed"
+      });
+    } catch (error: any) {
+      console.error("[BKT Training] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get user's ability estimate (IRT theta)
+  app.get("/api/ml/ability", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).claims.sub!;
+      const subject = req.query.subject as string;
+      
+      if (!subject) {
+        return res.status(400).json({ error: "Subject parameter required" });
+      }
+      
+      const { ability, standardError } = await estimateUserAbility(userId, subject);
+      
+      res.json({ 
+        userId,
+        subject,
+        ability: Math.round(ability * 100) / 100,
+        standardError: Math.round(standardError * 100) / 100,
+        interpretation: ability > 1 ? "Above Average" : ability > 0 ? "Average" : ability > -1 ? "Below Average" : "Needs Improvement"
+      });
+    } catch (error: any) {
+      console.error("[ML Ability] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get mastered topics for user
+  app.get("/api/ml/mastered-topics", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).claims.sub!;
+      
+      const masteredTopics = await getMasteredTopics(userId);
+      
+      res.json({ 
+        userId,
+        masteredTopics,
+        count: masteredTopics.length
+      });
+    } catch (error: any) {
+      console.error("[ML Mastery] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get advanced question recommendation (using all ML models)
+  app.get("/api/ml/next-question", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).claims.sub!;
+      const testType = (req.query.testType as string) || "DECA";
+      const subject = req.query.subject as string;
+      const excludeIds = (req.query.excludeIds as string)?.split(',') || [];
+      
+      if (!subject) {
+        return res.status(400).json({ error: "Subject parameter required" });
+      }
+      
+      const { question, selectedTopic, reason } = await selectAdvancedQuestion(
+        userId, testType, subject, excludeIds
+      );
+      
+      if (!question) {
+        return res.status(404).json({ error: "No suitable questions found", reason });
+      }
+      
+      res.json({ 
+        question,
+        selectedTopic,
+        reason,
+        algorithm: "Thompson Sampling + IRT CAT"
+      });
+    } catch (error: any) {
+      console.error("[ML Question] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update engagement metrics after session
+  app.post("/api/ml/engagement", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).claims.sub!;
+      const { questionsAttempted, questionsCorrect, totalTimeSpentMs, sessionDurationMs } = req.body;
+      
+      const { engagementScore, churnRisk } = await updateEngagementMetrics(
+        userId,
+        questionsAttempted || 0,
+        questionsCorrect || 0,
+        totalTimeSpentMs || 0,
+        sessionDurationMs
+      );
+      
+      res.json({ 
+        engagementScore: Math.round(engagementScore),
+        churnRisk: Math.round(churnRisk * 100) / 100,
+        riskLevel: churnRisk > 0.7 ? "High" : churnRisk > 0.4 ? "Medium" : "Low"
+      });
+    } catch (error: any) {
+      console.error("[ML Engagement] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get high churn risk users (admin analytics)
+  app.get("/api/ml/churn-risk", isAuthenticated, async (req, res) => {
+    try {
+      const threshold = parseFloat(req.query.threshold as string) || 0.7;
+      
+      const highRiskUsers = await getHighChurnRiskUsers(threshold);
+      
+      res.json({ 
+        threshold,
+        highRiskUsers,
+        count: highRiskUsers.length
+      });
+    } catch (error: any) {
+      console.error("[ML Churn] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get ML model training status
+  app.get("/api/ml/status", isAuthenticated, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { modelTrainingState } = await import("@shared/schema");
+      
+      const states = await db.select().from(modelTrainingState);
+      
+      res.json({
+        models: states.map(s => ({
+          modelType: s.modelType,
+          testType: s.testType,
+          subject: s.subject,
+          status: s.status,
+          lastTrainingRun: s.lastTrainingRun,
+          samplesUsed: s.samplesUsed,
+          modelVersion: s.modelVersion,
+          accuracy: s.modelAccuracy
+        }))
+      });
+    } catch (error: any) {
+      console.error("[ML Status] Error:", error);
       res.status(500).json({ error: error.message });
     }
   });
