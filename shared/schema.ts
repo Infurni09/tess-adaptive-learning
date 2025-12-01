@@ -150,6 +150,173 @@ export const userQuestionHistory = pgTable(
   ],
 );
 
+// ===== ADVANCED ML MODELS =====
+
+// Bayesian Knowledge Tracing (BKT) - Per user/topic knowledge state
+export const bktKnowledgeState = pgTable(
+  "bkt_knowledge_state",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    topic: text("topic").notNull(),
+    subject: text("subject"),
+    pKnown: real("p_known").notNull().default(0.3), // P(L) - Probability student knows the skill
+    pLearn: real("p_learn").notNull().default(0.2), // P(T) - Probability of learning on attempt
+    pGuess: real("p_guess").notNull().default(0.25), // P(G) - Probability of guessing correctly
+    pSlip: real("p_slip").notNull().default(0.1), // P(S) - Probability of making mistake despite knowing
+    totalObservations: integer("total_observations").notNull().default(0),
+    lastUpdated: timestamp("last_updated").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_bkt_user_topic").on(table.userId, table.topic),
+  ],
+);
+
+// Item Response Theory (IRT) Parameters - Per question psychometric properties
+export const irtParameters = pgTable(
+  "irt_parameters",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    questionId: varchar("question_id").notNull().references(() => questions.id, { onDelete: "cascade" }).unique(),
+    discrimination: real("discrimination").notNull().default(1.0), // 'a' parameter - how well question differentiates
+    difficulty: real("difficulty").notNull().default(0.0), // 'b' parameter - question difficulty (-3 to +3)
+    guessing: real("guessing").notNull().default(0.25), // 'c' parameter - probability of guessing (for 4 options)
+    informationPeak: real("information_peak").default(0.0), // Ability level where question is most informative
+    calibrationCount: integer("calibration_count").notNull().default(0), // Number of responses used for calibration
+    lastCalibrated: timestamp("last_calibrated"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_irt_question").on(table.questionId),
+    index("idx_irt_difficulty").on(table.difficulty),
+  ],
+);
+
+// User Ability Estimates (IRT) - Per user latent ability level
+export const userAbilityEstimate = pgTable(
+  "user_ability_estimate",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    subject: text("subject").notNull(),
+    ability: real("ability").notNull().default(0.0), // Theta - latent ability (-3 to +3)
+    standardError: real("standard_error").notNull().default(1.0), // Measurement uncertainty
+    responsesUsed: integer("responses_used").notNull().default(0),
+    lastEstimated: timestamp("last_estimated"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_ability_user_subject").on(table.userId, table.subject),
+  ],
+);
+
+// Learning Curves - Track learning trajectory over time (Power Law model)
+export const learningCurve = pgTable(
+  "learning_curve",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    topic: text("topic").notNull(),
+    subject: text("subject"),
+    trialNumber: integer("trial_number").notNull().default(1), // nth attempt at this topic
+    accuracy: real("accuracy").notNull(), // Performance on this trial (0-1)
+    responseTimeMs: integer("response_time_ms"), // Average response time
+    predictedAccuracy: real("predicted_accuracy"), // Model prediction (power law)
+    learningRate: real("learning_rate").default(0.3), // Fitted 'alpha' parameter
+    asymptote: real("asymptote").default(0.95), // Fitted maximum performance
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_learning_curve_user_topic").on(table.userId, table.topic),
+    index("idx_learning_curve_trial").on(table.userId, table.topic, table.trialNumber),
+  ],
+);
+
+// Knowledge Graph - Topic prerequisites and dependencies
+export const knowledgeGraph = pgTable(
+  "knowledge_graph",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    prerequisiteTopic: text("prerequisite_topic").notNull(),
+    dependentTopic: text("dependent_topic").notNull(),
+    strength: real("strength").notNull().default(0.5), // How strong the dependency is (0-1)
+    empiricalSupport: integer("empirical_support").notNull().default(0), // Count of observations supporting this edge
+    testType: text("test_type").notNull().default("DECA"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_kg_prerequisite").on(table.prerequisiteTopic),
+    index("idx_kg_dependent").on(table.dependentTopic),
+  ],
+);
+
+// Engagement Metrics - Track engagement patterns for dropout prediction
+export const engagementMetrics = pgTable(
+  "engagement_metrics",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sessionDate: timestamp("session_date").notNull(),
+    questionsAttempted: integer("questions_attempted").notNull().default(0),
+    questionsCorrect: integer("questions_correct").notNull().default(0),
+    totalTimeSpentMs: integer("total_time_spent_ms").notNull().default(0),
+    avgResponseTimeMs: integer("avg_response_time_ms"),
+    sessionDurationMs: integer("session_duration_ms"),
+    streakDays: integer("streak_days").notNull().default(1),
+    engagementScore: real("engagement_score").default(50), // 0-100 engagement health
+    churnRisk: real("churn_risk").default(0.5), // Probability of disengagement
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_engagement_user").on(table.userId),
+    index("idx_engagement_date").on(table.sessionDate),
+  ],
+);
+
+// Multi-Armed Bandit State - For exploration vs exploitation
+export const banditState = pgTable(
+  "bandit_state",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    topic: text("topic").notNull(),
+    pulls: integer("pulls").notNull().default(0), // Number of times this topic was "pulled"
+    rewards: real("rewards").notNull().default(0), // Sum of rewards (correct answers)
+    ucbValue: real("ucb_value").default(0), // Upper Confidence Bound value
+    thompsonAlpha: real("thompson_alpha").notNull().default(1), // Beta distribution alpha (successes + 1)
+    thompsonBeta: real("thompson_beta").notNull().default(1), // Beta distribution beta (failures + 1)
+    lastPulled: timestamp("last_pulled"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_bandit_user_topic").on(table.userId, table.topic),
+  ],
+);
+
+// Model Training State - Track model calibration and training status
+export const modelTrainingState = pgTable(
+  "model_training_state",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    modelType: text("model_type").notNull(), // 'BKT', 'IRT', 'LearningCurve', 'KnowledgeGraph'
+    testType: text("test_type").notNull().default("DECA"),
+    subject: text("subject"),
+    lastTrainingRun: timestamp("last_training_run"),
+    samplesUsed: integer("samples_used").notNull().default(0),
+    modelAccuracy: real("model_accuracy"), // Cross-validation accuracy
+    modelVersion: integer("model_version").notNull().default(1),
+    hyperparameters: text("hyperparameters"), // JSON string of model hyperparameters
+    status: text("status").notNull().default("untrained"), // 'untrained', 'training', 'trained', 'needs_update'
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_training_model_type").on(table.modelType),
+  ],
+);
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   id: true,
