@@ -415,7 +415,7 @@ export async function updateLearningCurve(
       subject,
       trialNumber,
       accuracy,
-      responseTimeMs,
+      responseTimeMs: responseTimeMs ? Math.round(responseTimeMs) : undefined,
       predictedAccuracy,
       learningRate,
       asymptote,
