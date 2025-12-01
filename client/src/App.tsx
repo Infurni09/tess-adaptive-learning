@@ -13,6 +13,7 @@ import Practice from "@/pages/Practice";
 import Analytics from "@/pages/Analytics";
 import AdaptivePractice from "@/pages/AdaptivePractice";
 import DiagnosticTest from "@/pages/DiagnosticTest";
+import Reports from "@/pages/Reports";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -44,6 +45,11 @@ function Router() {
       <Route path="/adaptive-practice">
         <ProtectedRoute>
           <AdaptivePractice />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/reports">
+        <ProtectedRoute>
+          <Reports />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />
